@@ -1,0 +1,270 @@
+
+import { Button } from "std-widgets.slint";
+
+component AppTile inherits Rectangle {
+    in property <string> symbol;
+    in property <string> label;
+    in property <color> tint;
+    callback clicked();
+
+    background: #202a3b;
+    border-radius: 22px;
+    border-width: 1px;
+    border-color: #35445c;
+
+    VerticalLayout {
+        alignment: center;
+        spacing: 12px;
+
+        Rectangle {
+            width: 66px;
+            height: 66px;
+            border-radius: 20px;
+            background: root.tint;
+
+            Text {
+                text: root.symbol;
+                color: #ffffff;
+                font-size: 34px;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+
+        Text {
+            text: root.label;
+            color: #f4f6ff;
+            font-size: 20px;
+            font-weight: 600;
+            horizontal-alignment: center;
+        }
+    }
+
+    TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+component Shortcut inherits Rectangle {
+    in property <string> symbol;
+    in property <string> label;
+    in property <bool> is-home: false;
+    callback clicked();
+
+    width: 66px;
+    height: 66px;
+    border-radius: 22px;
+    background: root.is-home ? #80aaff : #222b3b;
+
+    Text {
+        text: root.symbol;
+        color: root.is-home ? #101827 : #f4f6ff;
+        font-size: root.is-home ? 30px : 24px;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+export component MainWindow inherits Window {
+    title: "MusicPi Home";
+    width: 600px;
+    height: 1024px;
+    background: #0b1020;
+
+    in-out property <string> current-page: "Home";
+    in-out property <bool> immersive: false;
+
+    // Placeholder wallpaper accents; the video background comes later.
+    Rectangle {
+        x: 0px;
+        y: 0px;
+        width: parent.width;
+        height: parent.height;
+        background: #0b1020;
+
+        Rectangle {
+            x: -100px;
+            y: 160px;
+            width: 450px;
+            height: 450px;
+            border-radius: 225px;
+            background: #17264a;
+            opacity: 0.65;
+        }
+
+        Rectangle {
+            x: 250px;
+            y: 390px;
+            width: 420px;
+            height: 420px;
+            border-radius: 210px;
+            background: #252044;
+            opacity: 0.65;
+        }
+    }
+
+    VerticalLayout {
+        padding: 14px;
+        spacing: 0px;
+
+        if !root.immersive: Rectangle {
+            height: 42px;
+            background: #171d2a;
+            border-radius: 12px;
+
+            HorizontalLayout {
+                padding-left: 14px;
+                padding-right: 14px;
+
+                Text {
+                    text: "◉  Wi-Fi";
+                    color: #dce6ff;
+                    vertical-alignment: center;
+                    font-size: 15px;
+                }
+
+                Rectangle { background: transparent; }
+
+                Text {
+                    text: "14:30";
+                    color: #ffffff;
+                    vertical-alignment: center;
+                    font-size: 16px;
+                    font-weight: 600;
+                }
+
+                Rectangle { background: transparent; }
+
+                Text {
+                    text: "◖ 59%";
+                    color: #dce6ff;
+                    vertical-alignment: center;
+                    font-size: 15px;
+                }
+            }
+        }
+
+        Rectangle { height: 20px; background: transparent; }
+
+        if !root.immersive: VerticalLayout {
+            spacing: 18px;
+
+            Text {
+                text: root.current-page == "Home" ? "MusicPi" : root.current-page;
+                color: #ffffff;
+                font-size: 34px;
+                font-weight: 700;
+            }
+
+            Text {
+                text: "Your music. Your world.";
+                color: #aab8d4;
+                font-size: 16px;
+            }
+
+            Rectangle { height: 12px; background: transparent; }
+
+            HorizontalLayout {
+                spacing: 18px;
+
+                AppTile {
+                    label: "Local Music";
+                    symbol: "♫";
+                    tint: #426ca9;
+                    clicked => { root.current-page = "Local Music"; }
+                }
+
+                AppTile {
+                    label: "Spotify";
+                    symbol: "≋";
+                    tint: #25875b;
+                    clicked => { root.current-page = "Spotify"; }
+                }
+            }
+
+            HorizontalLayout {
+                spacing: 18px;
+
+                AppTile {
+                    label: "Video";
+                    symbol: "▶";
+                    tint: #8b5da9;
+                    clicked => { root.current-page = "Video"; }
+                }
+
+                AppTile {
+                    label: "Settings";
+                    symbol: "⚙";
+                    tint: #a16c47;
+                    clicked => { root.current-page = "Settings"; }
+                }
+            }
+
+            Rectangle {
+                height: 1px;
+                background: #39445a;
+                opacity: 0.5;
+            }
+
+            Text {
+                text: "Selected: " + root.current-page;
+                color: #aab8d4;
+                font-size: 14px;
+            }
+        }
+
+        Rectangle { height: 20px; background: transparent; }
+
+        Rectangle { background: transparent; }
+
+        if !root.immersive: Rectangle {
+            height: 92px;
+            background: #171d2a;
+            border-radius: 24px;
+
+            HorizontalLayout {
+                alignment: center;
+                spacing: 10px;
+                padding: 8px;
+
+                Shortcut {
+                    symbol: "♫";
+                    label: "";
+                    clicked => { root.current-page = "Local Music"; }
+                }
+
+                Shortcut {
+                    symbol: "▶";
+                    label: "";
+                    clicked => { root.current-page = "Video"; }
+                }
+
+                Shortcut {
+                    symbol: "⌂";
+                    label: "Home";
+                    is-home: true;
+                    clicked => {
+                        root.current-page = "Home";
+                        root.immersive = false;
+                    }
+                }
+
+                Shortcut {
+                    symbol: "≋";
+                    label: "";
+                    clicked => { root.current-page = "Spotify"; }
+                }
+
+                Shortcut {
+                    symbol: "⚙";
+                    label: "";
+                    clicked => { root.current-page = "Settings"; }
+                }
+            }
+        }
+    }
+}
