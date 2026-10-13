@@ -16,22 +16,30 @@ component AppTile inherits Rectangle {
         alignment: center;
         spacing: 14px;
 
-        Rectangle {
-            width: 100px;
+        HorizontalLayout {
             height: 100px;
-            border-radius: 28px;
-            background: root.tint;
+            alignment: center;
 
-            Text {
-                text: root.symbol;
-                color: #ffffff;
-                font-size: 52px;
-                horizontal-alignment: center;
-                vertical-alignment: center;
+            Rectangle {
+                width: 100px;
+                height: 100px;
+                border-radius: 28px;
+                background: root.tint;
+
+                Text {
+                    width: parent.width;
+                    height: parent.height;
+                    text: root.symbol;
+                    color: #ffffff;
+                    font-size: 52px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
             }
         }
 
         Text {
+            width: 100%;
             text: root.label;
             color: #f4f6ff;
             font-size: 18px;
@@ -373,24 +381,24 @@ component PlaceholderPage inherits Rectangle {
             wrap: word-wrap;
         }
 
-        Rectangle {
-            width: 168px;
-            height: 48px;
-            border-radius: 16px;
-            background: #2b4d82;
-            Text {
-                text: "Back to Home";
-                color: #ffffff;
-                font-size: 15px;
-                font-weight: 600;
-                horizontal-alignment: center;
-                vertical-alignment: center;
-            }
+        // Rectangle {
+        //     width: 168px;
+        //     height: 48px;
+        //     border-radius: 16px;
+        //     background: #2b4d82;
+        //     Text {
+        //         text: "Back to Home";
+        //         color: #ffffff;
+        //         font-size: 15px;
+        //         font-weight: 600;
+        //         horizontal-alignment: center;
+        //         vertical-alignment: center;
+        //     }
 
-            TouchArea {
-                clicked => { root.home-requested(); }
-            }
-        }
+        //     TouchArea {
+        //         clicked => { root.home-requested(); }
+        //     }
+        // }
     }
 }
 
