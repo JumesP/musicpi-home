@@ -2406,8 +2406,10 @@ dependencies = [
 name = "musicpi-home"
 version = "0.1.0"
 dependencies = [
+ "i-slint-backend-winit",
  "slint",
  "slint-build",
+ "winit",
 ]
 
 [[package]]

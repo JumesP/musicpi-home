@@ -1,31 +1,31 @@
-
-import { Button } from "std-widgets.slint";
-
 component AppTile inherits Rectangle {
     in property <string> symbol;
     in property <string> label;
     in property <color> tint;
     callback clicked();
 
-    background: #202a3b;
+    width: 267px;
+    height: 236px;
+    background: #18202d;
     border-radius: 22px;
     border-width: 1px;
-    border-color: #35445c;
+    border-color: #314057;
 
     VerticalLayout {
+        padding: 20px;
         alignment: center;
-        spacing: 12px;
+        spacing: 14px;
 
         Rectangle {
-            width: 66px;
-            height: 66px;
-            border-radius: 20px;
+            width: 100px;
+            height: 100px;
+            border-radius: 28px;
             background: root.tint;
 
             Text {
                 text: root.symbol;
                 color: #ffffff;
-                font-size: 34px;
+                font-size: 52px;
                 horizontal-alignment: center;
                 vertical-alignment: center;
             }
@@ -34,9 +34,10 @@ component AppTile inherits Rectangle {
         Text {
             text: root.label;
             color: #f4f6ff;
-            font-size: 20px;
+            font-size: 18px;
             font-weight: 600;
             horizontal-alignment: center;
+            wrap: word-wrap;
         }
     }
 
@@ -47,19 +48,18 @@ component AppTile inherits Rectangle {
 
 component Shortcut inherits Rectangle {
     in property <string> symbol;
-    in property <string> label;
     in property <bool> is-home: false;
     callback clicked();
 
-    width: 66px;
-    height: 66px;
-    border-radius: 22px;
-    background: root.is-home ? #80aaff : #222b3b;
+    width: 68px;
+    height: 68px;
+    border-radius: 20px;
+    background: root.is-home ? #d4e4ff : #202a3a;
 
     Text {
         text: root.symbol;
-        color: root.is-home ? #101827 : #f4f6ff;
-        font-size: root.is-home ? 30px : 24px;
+        color: root.is-home ? #142033 : #dce6f8;
+        font-size: root.is-home ? 31px : 25px;
         horizontal-alignment: center;
         vertical-alignment: center;
     }
@@ -69,199 +69,467 @@ component Shortcut inherits Rectangle {
     }
 }
 
+component PageHeader inherits Rectangle {
+    in property <string> title;
+    in property <string> subtitle;
+    height: 84px;
+    background: transparent;
+
+    VerticalLayout {
+        spacing: 5px;
+        Text {
+            text: root.title;
+            color: #ffffff;
+            font-size: 34px;
+            font-weight: 700;
+        }
+
+        Text {
+            text: root.subtitle;
+            color: #9eacc3;
+            font-size: 16px;
+        }
+    }
+}
+
+component SettingsSection inherits Rectangle {
+    in property <string> title;
+    height: 28px;
+    background: transparent;
+
+    Text {
+        text: root.title;
+        color: #8fa6c8;
+        font-size: 13px;
+        font-weight: 700;
+        vertical-alignment: center;
+    }
+}
+
+component SettingStepper inherits Rectangle {
+    in property <string> label;
+    in property <string> detail;
+    in-out property <int> value;
+    callback value-changed(int);
+
+    height: 66px;
+    background: #18202d;
+    border-radius: 16px;
+    border-width: 1px;
+    border-color: #2c3b52;
+
+    VerticalLayout {
+        padding-left: 16px;
+        padding-right: 150px;
+        alignment: center;
+        spacing: 2px;
+        Text {
+            text: root.label;
+            color: #f5f7fc;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        Text {
+            text: root.detail;
+            color: #91a0b8;
+            font-size: 13px;
+        }
+    }
+
+    HorizontalLayout {
+        x: parent.width - self.width - 8px;
+        y: (parent.height - self.height) / 2;
+        width: 142px;
+        height: 38px;
+        spacing: 8px;
+
+        Rectangle {
+            width: 34px;
+            height: 34px;
+            border-radius: 11px;
+            background: #26364d;
+            Text {
+                text: "-";
+                color: #dce6f8;
+                font-size: 22px;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+
+            TouchArea {
+                clicked => {
+                    if root.value > 0 {
+                        root.value = root.value - 1;
+                        root.value-changed(root.value);
+                    }
+                }
+            }
+        }
+
+        Text {
+            text: root.value + "%";
+            width: 48px;
+            color: #ffffff;
+            font-size: 15px;
+            font-weight: 700;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+
+        Rectangle {
+            width: 34px;
+            height: 34px;
+            border-radius: 11px;
+            background: #26364d;
+            Text {
+                text: "+";
+                color: #dce6f8;
+                font-size: 22px;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+
+            TouchArea {
+                clicked => {
+                    if root.value < 100 {
+                        root.value = root.value + 1;
+                        root.value-changed(root.value);
+                    }
+                }
+            }
+        }
+    }
+}
+
+component SettingChoice inherits Rectangle {
+    in property <string> label;
+    in property <string> detail;
+    in property <string> value;
+    callback clicked();
+
+    height: 66px;
+    background: #18202d;
+    border-radius: 16px;
+    border-width: 1px;
+    border-color: #2c3b52;
+
+    VerticalLayout {
+        padding-left: 16px;
+        padding-right: 150px;
+        alignment: center;
+        spacing: 2px;
+        Text {
+            text: root.label;
+            color: #f5f7fc;
+            font-size: 16px;
+            font-weight: 600;
+        }
+
+        Text {
+            text: root.detail;
+            color: #91a0b8;
+            font-size: 13px;
+        }
+    }
+
+    Text {
+        text: root.value + "  >";
+        x: parent.width - self.width - 16px;
+        y: (parent.height - self.height) / 2;
+        color: #9fc2ff;
+        font-size: 15px;
+        horizontal-alignment: right;
+    }
+
+    TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+component SettingsPage inherits Rectangle {
+    in-out property <int> music-volume: 58;
+    in-out property <int> headphones-volume: 42;
+    in-out property <int> other-volume: 25;
+    in-out property <bool> bluetooth-enabled: true;
+    callback music-volume-changed(int);
+    callback headphones-volume-changed(int);
+    callback other-volume-changed(int);
+    callback bluetooth-enabled-changed(bool);
+
+    background: transparent;
+
+    VerticalLayout {
+        spacing: 9px;
+        PageHeader {
+            title: "Settings";
+            subtitle: "Tune the player to your setup";
+        }
+
+        SettingsSection {
+            title: "AUDIO";
+        }
+
+        SettingStepper {
+            label: "Music volume";
+            detail: "Playback and local music";
+            value: root.music-volume;
+            value-changed(value) => { root.music-volume = value; root.music-volume-changed(value); }
+        }
+
+        SettingStepper {
+            label: "Headphones";
+            detail: "Headphone output level";
+            value: root.headphones-volume;
+            value-changed(value) => { root.headphones-volume = value; root.headphones-volume-changed(value); }
+        }
+
+        SettingStepper {
+            label: "Other volume";
+            detail: "System sounds and alerts";
+            value: root.other-volume;
+            value-changed(value) => { root.other-volume = value; root.other-volume-changed(value); }
+        }
+
+        SettingsSection {
+            title: "OUTPUT";
+        }
+
+        SettingChoice {
+            label: "Playing device";
+            detail: "Where audio is sent right now";
+            value: "Headphones";
+            clicked => {}
+        }
+
+        SettingChoice {
+            label: "Bluetooth audio";
+            detail: root.bluetooth-enabled ? "Ready to connect" : "Bluetooth is off";
+            value: root.bluetooth-enabled ? "On" : "Off";
+            clicked => { root.bluetooth-enabled = !root.bluetooth-enabled; root.bluetooth-enabled-changed(root.bluetooth-enabled); }
+        }
+
+        SettingsSection {
+            title: "DEVICE";
+        }
+
+        SettingChoice {
+            label: "Bluetooth devices";
+            detail: "Pair and manage audio devices";
+            value: "Manage";
+            clicked => {}
+        }
+
+        SettingChoice {
+            label: "Keyboard";
+            detail: "Layout and key behaviour";
+            value: "US English";
+            clicked => {}
+        }
+
+        Rectangle {
+            height: 1px;
+            background: transparent;
+        }
+
+        Text {
+            text: "System controls will connect to Raspberry Pi services here.";
+            color: #71819a;
+            font-size: 12px;
+        }
+    }
+}
+
+component PlaceholderPage inherits Rectangle {
+    in property <string> title;
+    in property <string> symbol;
+    in property <string> description;
+    callback home-requested();
+    background: transparent;
+
+    VerticalLayout {
+        alignment: center;
+        spacing: 16px;
+        Text {
+            text: root.symbol;
+            color: #9fc2ff;
+            font-size: 64px;
+            horizontal-alignment: center;
+        }
+
+        Text {
+            text: root.title;
+            color: #ffffff;
+            font-size: 30px;
+            font-weight: 700;
+            horizontal-alignment: center;
+        }
+
+        Text {
+            text: root.description;
+            color: #9eacc3;
+            font-size: 16px;
+            horizontal-alignment: center;
+            wrap: word-wrap;
+        }
+
+        Rectangle {
+            width: 168px;
+            height: 48px;
+            border-radius: 16px;
+            background: #2b4d82;
+            Text {
+                text: "Back to Home";
+                color: #ffffff;
+                font-size: 15px;
+                font-weight: 600;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+
+            TouchArea {
+                clicked => { root.home-requested(); }
+            }
+        }
+    }
+}
+
 export component MainWindow inherits Window {
     title: "MusicPi Home";
     width: 600px;
     height: 1024px;
-    background: #0b1020;
+    background: transparent;
 
     in-out property <string> current-page: "Home";
     in-out property <bool> immersive: false;
-
-    // Placeholder wallpaper accents; the video background comes later.
-    Rectangle {
-        x: 0px;
-        y: 0px;
-        width: parent.width;
-        height: parent.height;
-        background: #0b1020;
-
-        Rectangle {
-            x: -100px;
-            y: 160px;
-            width: 450px;
-            height: 450px;
-            border-radius: 225px;
-            background: #17264a;
-            opacity: 0.65;
-        }
-
-        Rectangle {
-            x: 250px;
-            y: 390px;
-            width: 420px;
-            height: 420px;
-            border-radius: 210px;
-            background: #252044;
-            opacity: 0.65;
-        }
-    }
+    property <int> music-volume: 58;
+    property <int> headphones-volume: 42;
+    property <int> other-volume: 25;
+    property <bool> bluetooth-enabled: true;
+    callback open-local-music();
+    callback open-spotify();
+    callback open-video();
 
     VerticalLayout {
-        padding: 14px;
+        padding: 24px;
         spacing: 0px;
 
         if !root.immersive: Rectangle {
-            height: 42px;
-            background: #171d2a;
-            border-radius: 12px;
-
-            HorizontalLayout {
-                padding-left: 14px;
-                padding-right: 14px;
-
-                Text {
-                    text: "◉  Wi-Fi";
-                    color: #dce6ff;
-                    vertical-alignment: center;
-                    font-size: 15px;
+            if root.current-page == "Home": VerticalLayout {
+                spacing: 18px;
+                PageHeader {
+                    title: "MusicPi";
+                    subtitle: "Your music. Your world.";
                 }
 
-                Rectangle { background: transparent; }
+                HorizontalLayout {
+                    spacing: 18px;
+                    AppTile {
+                        label: "Local Music";
+                        symbol: "♫";
+                        tint: #3e6fae;
+                        clicked => { root.current-page = "Local Music"; root.open-local-music(); }
+                    }
 
-                Text {
-                    text: "14:30";
-                    color: #ffffff;
-                    vertical-alignment: center;
-                    font-size: 16px;
-                    font-weight: 600;
+                    AppTile {
+                        label: "Spotify";
+                        symbol: "S";
+                        tint: #25875b;
+                        clicked => { root.current-page = "Spotify"; root.open-spotify(); }
+                    }
                 }
 
-                Rectangle { background: transparent; }
+                HorizontalLayout {
+                    spacing: 18px;
+                    AppTile {
+                        label: "Video";
+                        symbol: "▶";
+                        tint: #7458a8;
+                        clicked => { root.current-page = "Video"; root.open-video(); }
+                    }
 
-                Text {
-                    text: "◖ 59%";
-                    color: #dce6ff;
-                    vertical-alignment: center;
-                    font-size: 15px;
+                    AppTile {
+                        label: "Settings";
+                        symbol: "...";
+                        tint: #a26642;
+                        clicked => { root.current-page = "Settings"; }
+                    }
                 }
+
+                Rectangle {
+                    background: transparent;
+                }
+            }
+
+            if root.current-page == "Settings": SettingsPage {
+                music-volume: root.music-volume;
+                headphones-volume: root.headphones-volume;
+                other-volume: root.other-volume;
+                bluetooth-enabled: root.bluetooth-enabled;
+                music-volume-changed(value) => { root.music-volume = value; }
+                headphones-volume-changed(value) => { root.headphones-volume = value; }
+                other-volume-changed(value) => { root.other-volume = value; }
+                bluetooth-enabled-changed(value) => { root.bluetooth-enabled = value; }
+            }
+
+            if root.current-page == "Local Music": PlaceholderPage {
+                title: "Local Music";
+                symbol: "♫";
+                description: "Your local library will appear here when music services are connected.";
+                home-requested => { root.current-page = "Home"; }
+            }
+            if root.current-page == "Spotify": PlaceholderPage {
+                title: "Spotify";
+                symbol: "≋";
+                description: "Spotify controls are not connected yet. This space is ready for integration.";
+                home-requested => { root.current-page = "Home"; }
+            }
+            if root.current-page == "Video": PlaceholderPage {
+                title: "Video";
+                symbol: "▶";
+                description: "MPV playback will be controlled here while the wallpaper remains independent.";
+                home-requested => { root.current-page = "Home"; }
             }
         }
 
-        Rectangle { height: 20px; background: transparent; }
-
-        if !root.immersive: VerticalLayout {
-            spacing: 18px;
-
-            Text {
-                text: root.current-page == "Home" ? "MusicPi" : root.current-page;
-                color: #ffffff;
-                font-size: 34px;
-                font-weight: 700;
-            }
-
-            Text {
-                text: "Your music. Your world.";
-                color: #aab8d4;
-                font-size: 16px;
-            }
-
-            Rectangle { height: 12px; background: transparent; }
-
-            HorizontalLayout {
-                spacing: 18px;
-
-                AppTile {
-                    label: "Local Music";
-                    symbol: "♫";
-                    tint: #426ca9;
-                    clicked => { root.current-page = "Local Music"; }
-                }
-
-                AppTile {
-                    label: "Spotify";
-                    symbol: "≋";
-                    tint: #25875b;
-                    clicked => { root.current-page = "Spotify"; }
-                }
-            }
-
-            HorizontalLayout {
-                spacing: 18px;
-
-                AppTile {
-                    label: "Video";
-                    symbol: "▶";
-                    tint: #8b5da9;
-                    clicked => { root.current-page = "Video"; }
-                }
-
-                AppTile {
-                    label: "Settings";
-                    symbol: "⚙";
-                    tint: #a16c47;
-                    clicked => { root.current-page = "Settings"; }
-                }
-            }
-
-            Rectangle {
-                height: 1px;
-                background: #39445a;
-                opacity: 0.5;
-            }
-
-            Text {
-                text: "Selected: " + root.current-page;
-                color: #aab8d4;
-                font-size: 14px;
-            }
+        Rectangle {
+            height: 1px;
+            background: transparent;
         }
-
-        Rectangle { height: 20px; background: transparent; }
-
-        Rectangle { background: transparent; }
 
         if !root.immersive: Rectangle {
             height: 92px;
-            background: #171d2a;
-            border-radius: 24px;
-
+            background: #151d2a;
+            border-radius: 26px;
+            border-width: 1px;
+            border-color: #293850;
             HorizontalLayout {
                 alignment: center;
-                spacing: 10px;
-                padding: 8px;
-
+                spacing: 12px;
+                padding: 10px;
                 Shortcut {
                     symbol: "♫";
-                    label: "";
-                    clicked => { root.current-page = "Local Music"; }
+                    clicked => { root.current-page = "Local Music"; root.open-local-music(); }
                 }
 
                 Shortcut {
                     symbol: "▶";
-                    label: "";
-                    clicked => { root.current-page = "Video"; }
+                    clicked => { root.current-page = "Video"; root.open-video(); }
                 }
 
                 Shortcut {
                     symbol: "⌂";
-                    label: "Home";
                     is-home: true;
-                    clicked => {
-                        root.current-page = "Home";
-                        root.immersive = false;
-                    }
+                    clicked => { root.current-page = "Home"; root.immersive = false; }
                 }
 
                 Shortcut {
-                    symbol: "≋";
-                    label: "";
-                    clicked => { root.current-page = "Spotify"; }
+                    symbol: "S";
+                    clicked => { root.current-page = "Spotify"; root.open-spotify(); }
                 }
 
                 Shortcut {
-                    symbol: "⚙";
-                    label: "";
+                    symbol: "S";
                     clicked => { root.current-page = "Settings"; }
                 }
             }

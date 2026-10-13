@@ -12,6 +12,15 @@ slint = { version = "1.18", default-features = false, features = [
     "backend-winit",
     "renderer-software",
 ] }
+i-slint-backend-winit = { version = "1.18", default-features = false, features = [
+    "renderer-software",
+] }
+winit = "0.30"
+
+[features]
+default = ["desktop"]
+desktop = ["slint/backend-winit", "slint/renderer-software"]
+pi = ["desktop"]
 
 [build-dependencies]
 slint-build = "1.18"
