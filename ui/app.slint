@@ -54,29 +54,6 @@ component AppTile inherits Rectangle {
     }
 }
 
-component Shortcut inherits Rectangle {
-    in property <string> symbol;
-    in property <bool> is-home: false;
-    callback clicked();
-
-    width: 68px;
-    height: 68px;
-    border-radius: 20px;
-    background: root.is-home ? #d4e4ff : #202a3a;
-
-    Text {
-        text: root.symbol;
-        color: root.is-home ? #142033 : #dce6f8;
-        font-size: root.is-home ? 31px : 25px;
-        horizontal-alignment: center;
-        vertical-alignment: center;
-    }
-
-    TouchArea {
-        clicked => { root.clicked(); }
-    }
-}
-
 component PageHeader inherits Rectangle {
     in property <string> title;
     in property <string> subtitle;
@@ -503,44 +480,6 @@ export component MainWindow inherits Window {
         Rectangle {
             height: 1px;
             background: transparent;
-        }
-
-        if !root.immersive: Rectangle {
-            height: 92px;
-            background: #151d2a;
-            border-radius: 26px;
-            border-width: 1px;
-            border-color: #293850;
-            HorizontalLayout {
-                alignment: center;
-                spacing: 12px;
-                padding: 10px;
-                Shortcut {
-                    symbol: "♫";
-                    clicked => { root.current-page = "Local Music"; root.open-local-music(); }
-                }
-
-                Shortcut {
-                    symbol: "▶";
-                    clicked => { root.current-page = "Video"; root.open-video(); }
-                }
-
-                Shortcut {
-                    symbol: "⌂";
-                    is-home: true;
-                    clicked => { root.current-page = "Home"; root.immersive = false; }
-                }
-
-                Shortcut {
-                    symbol: "S";
-                    clicked => { root.current-page = "Spotify"; root.open-spotify(); }
-                }
-
-                Shortcut {
-                    symbol: "S";
-                    clicked => { root.current-page = "Settings"; }
-                }
-            }
         }
     }
 }
