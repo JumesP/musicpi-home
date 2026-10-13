@@ -27,8 +27,8 @@ component AppTile inherits Rectangle {
                 background: root.tint;
 
                 Text {
-                    width: parent.width;
-                    height: parent.height;
+                    width: 100%;
+                    height: 100%;
                     text: root.symbol;
                     color: #ffffff;
                     font-size: 52px;
@@ -95,6 +95,7 @@ component SettingStepper inherits Rectangle {
     in property <string> label;
     in property <string> detail;
     in-out property <int> value;
+    in property <int> step: 1;
     callback value-changed(int);
 
     height: 66px;
@@ -145,7 +146,7 @@ component SettingStepper inherits Rectangle {
             TouchArea {
                 clicked => {
                     if root.value > 0 {
-                        root.value = root.value - 1;
+                        root.value = max(0, root.value - root.step);
                         root.value-changed(root.value);
                     }
                 }
@@ -178,7 +179,7 @@ component SettingStepper inherits Rectangle {
             TouchArea {
                 clicked => {
                     if root.value < 100 {
-                        root.value = root.value + 1;
+                        root.value = min(100, root.value + root.step);
                         root.value-changed(root.value);
                     }
                 }
@@ -191,13 +192,14 @@ component SettingChoice inherits Rectangle {
     in property <string> label;
     in property <string> detail;
     in property <string> value;
+    in property <bool> selected;
     callback clicked();
 
     height: 66px;
     background: #18202d;
     border-radius: 16px;
     border-width: 1px;
-    border-color: #2c3b52;
+    border-color: root.selected ? #9fc2ff : #2c3b52;
 
     VerticalLayout {
         padding-left: 16px;
@@ -232,15 +234,93 @@ component SettingChoice inherits Rectangle {
     }
 }
 
+struct BackgroundEntry {
+    name: string,
+    preview: image,
+    is-video: bool,
+    category: string,
+}
+
+component BackgroundCard inherits Rectangle {
+    in property <BackgroundEntry> entry;
+    in property <bool> selected;
+    callback clicked();
+
+    width: 250px;
+    height: 190px;
+    border-radius: 18px;
+    border-width: 2px;
+    border-color: root.selected ? #9fc2ff : #2c3b52;
+    background: #18202d;
+
+    Image {
+        source: root.entry.preview;
+        x: 8px;
+        y: 8px;
+        width: parent.width - 16px;
+        height: 132px;
+        visible: !root.entry.is-video;
+    }
+
+    Rectangle {
+        x: 8px;
+        y: 8px;
+        width: parent.width - 16px;
+        height: 132px;
+        background: root.entry.is-video ? #26364d : transparent;
+        visible: root.entry.is-video;
+
+        Text {
+            text: "▶";
+            color: #9fc2ff;
+            font-size: 42px;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+    }
+
+    Text {
+        text: root.entry.name;
+        x: 16px;
+        y: 148px;
+        width: parent.width - 32px;
+        color: #f5f7fc;
+        font-size: 16px;
+        font-weight: 600;
+        horizontal-alignment: center;
+    }
+
+    Text {
+        text: root.selected ? "Selected" : "Select";
+        x: 16px;
+        y: 169px;
+        width: parent.width - 32px;
+        color: #9fc2ff;
+        font-size: 12px;
+        horizontal-alignment: center;
+    }
+
+    TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
 component SettingsPage inherits Rectangle {
     in-out property <int> music-volume: 58;
     in-out property <int> headphones-volume: 42;
     in-out property <int> other-volume: 25;
     in-out property <bool> bluetooth-enabled: true;
+    in-out property <int> background-overlay-opacity: 25;
+    in property <[string]> background-options;
+    in property <string> background-name;
     callback music-volume-changed(int);
     callback headphones-volume-changed(int);
     callback other-volume-changed(int);
     callback bluetooth-enabled-changed(bool);
+    callback background-overlay-opacity-changed(int);
+    callback background-selected(string);
+    callback backgrounds-requested();
+    callback back-requested();
 
     background: transparent;
 
@@ -249,6 +329,26 @@ component SettingsPage inherits Rectangle {
         PageHeader {
             title: "Settings";
             subtitle: "Tune the player to your setup";
+        }
+
+        Rectangle {
+            width: 140px;
+            height: 42px;
+            border-radius: 12px;
+            background: #26364d;
+
+            Text {
+                text: "<  Back";
+                color: #dce6f8;
+                font-size: 15px;
+                font-weight: 600;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+
+            TouchArea {
+                clicked => { root.back-requested(); }
+            }
         }
 
         SettingsSection {
@@ -278,6 +378,25 @@ component SettingsPage inherits Rectangle {
 
         SettingsSection {
             title: "OUTPUT";
+        }
+
+        SettingChoice {
+            label: "Background";
+            detail: "Choose an image or video wallpaper";
+            value: root.background-name;
+            selected: false;
+            clicked => { root.backgrounds-requested(); }
+        }
+
+        SettingStepper {
+            label: "Background dimming";
+            detail: "Dark overlay for bright backgrounds";
+            value: root.background-overlay-opacity;
+            step: 5;
+            value-changed(value) => {
+                root.background-overlay-opacity = value;
+                root.background-overlay-opacity-changed(value);
+            }
         }
 
         SettingChoice {
@@ -325,6 +444,139 @@ component SettingsPage inherits Rectangle {
     }
 }
 
+component BackgroundsPage inherits Rectangle {
+    in property <[BackgroundEntry]> animated-entries;
+    in property <[BackgroundEntry]> still-entries;
+    in property <[BackgroundEntry]> pokemon-entries;
+    in property <[BackgroundEntry]> lifestyle-entries;
+    in property <[BackgroundEntry]> anime-entries;
+    in property <string> selected-name;
+    property <bool> animated-tab: false;
+    property <string> still-category: "pokemon";
+    callback background-selected(string);
+    callback back-requested();
+
+    background: transparent;
+
+    VerticalLayout {
+        spacing: 14px;
+
+        PageHeader {
+            title: "Backgrounds";
+            subtitle: "Choose a background for MusicPi";
+        }
+
+        Rectangle {
+            width: 140px;
+            height: 42px;
+            border-radius: 12px;
+            background: #26364d;
+
+            Text {
+                text: "<  Back";
+                color: #dce6f8;
+                font-size: 15px;
+                font-weight: 600;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+
+            TouchArea {
+                clicked => { root.back-requested(); }
+            }
+        }
+
+        HorizontalLayout {
+            height: 42px;
+            spacing: 8px;
+
+            Rectangle {
+                width: 150px;
+                border-radius: 12px;
+                background: root.animated-tab ? #26364d : #9fc2ff;
+                Text {
+                    text: "Still";
+                    color: root.animated-tab ? #dce6f8 : #101722;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+
+                TouchArea {
+                    clicked => { root.animated-tab = false; }
+                }
+            }
+
+            Rectangle {
+                width: 150px;
+                border-radius: 12px;
+                background: root.animated-tab ? #9fc2ff : #26364d;
+                Text {
+                    text: "Animated";
+                    color: root.animated-tab ? #101722 : #dce6f8;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+
+                TouchArea {
+                    clicked => { root.animated-tab = true; }
+                }
+            }
+        }
+
+        if !root.animated-tab: HorizontalLayout {
+            height: 42px;
+            spacing: 8px;
+
+            for category in ["pokemon", "lifestyle", "anime"]: Rectangle {
+                width: 150px;
+                border-radius: 12px;
+                background: root.still-category == category ? #9fc2ff : #26364d;
+                Text {
+                    text: category;
+                    color: root.still-category == category ? #101722 : #dce6f8;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+
+                TouchArea {
+                    clicked => { root.still-category = category; }
+                }
+            }
+        }
+
+        Flickable {
+            width: 100%;
+            vertical-stretch: 1;
+            interactive: true;
+            mouse-drag-pan-enabled: true;
+            content-width: 514px;
+            content-height: root.animated-tab
+                ? 190px
+                : (root.still-category == "pokemon"
+                ? 598px
+                : (root.still-category == "lifestyle" ? 1006px : 190px));
+
+            grid := GridLayout {
+                width: 514px;
+                spacing: 14px;
+                for entry[index] in root.animated-tab
+                    ? root.animated-entries
+                    : (root.still-category == "pokemon"
+                    ? root.pokemon-entries
+                    : (root.still-category == "lifestyle"
+                    ? root.lifestyle-entries
+                    : root.anime-entries)): BackgroundCard {
+                    col: index.mod(2);
+                    row: index / 2;
+                    entry: entry;
+                    selected: entry.name == root.selected-name;
+                    clicked => { root.background-selected(entry.name); }
+                }
+            }
+        }
+    }
+}
+
 component PlaceholderPage inherits Rectangle {
     in property <string> title;
     in property <string> symbol;
@@ -358,24 +610,366 @@ component PlaceholderPage inherits Rectangle {
             wrap: word-wrap;
         }
 
-        // Rectangle {
-        //     width: 168px;
-        //     height: 48px;
-        //     border-radius: 16px;
-        //     background: #2b4d82;
-        //     Text {
-        //         text: "Back to Home";
-        //         color: #ffffff;
-        //         font-size: 15px;
-        //         font-weight: 600;
-        //         horizontal-alignment: center;
-        //         vertical-alignment: center;
-        //     }
+        Rectangle {
+            x: (parent.width - self.width) / 2;
+            width: 168px;
+            height: 48px;
+            border-radius: 16px;
+            background: #2b4d82;
 
-        //     TouchArea {
-        //         clicked => { root.home-requested(); }
-        //     }
-        // }
+            Text {
+                text: "Back to Home";
+                color: #ffffff;
+                font-size: 15px;
+                font-weight: 600;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+
+            TouchArea {
+                clicked => { root.home-requested(); }
+            }
+        }
+    }
+}
+
+component ImmersiveToggle inherits Rectangle {
+    in property <bool> immersive;
+    callback clicked();
+
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    background: #18202dcc;
+    border-width: 1px;
+    border-color: #ffffff33;
+
+    Text {
+        text: root.immersive ? "×" : "⛶";
+        width: parent.width;
+        height: parent.height;
+        color: #ffffff;
+        font-size: root.immersive ? 27px : 22px;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+component NowPlayingPreview inherits Rectangle {
+    in property <string> title: "Nothing playing";
+    in property <string> artist: "Cadence";
+    in property <string> album: "";
+    in property <string> player: "cadence";
+    in property <image> artwork;
+    in property <float> progress: 0.0;
+    in property <bool> playing: false;
+    callback open();
+    callback toggle();
+
+    width: 100%;
+    height: 100px;
+    background: #18202dcc;
+    border-radius: 12px;
+    border-width: 1px;
+    border-color: #ffffff33;
+
+    TouchArea {
+        clicked => { root.open(); }
+    }
+
+    // Artwork
+    Rectangle {
+        x: 14px;
+        y: 14px;
+        width: 58px;
+        height: 58px;
+        border-radius: 6px;
+        background: #26364d;
+        clip: true;
+
+        if root.artwork.width > 0: Image {
+            source: root.artwork;
+            width: parent.width;
+            height: parent.height;
+            image-fit: contain;
+        }
+
+        if root.artwork.width == 0: Text {
+            text: "♪";
+            width: parent.width;
+            height: parent.height;
+            color: #91a0b8;
+            font-size: 28px;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+    }
+
+    // Song info
+    VerticalLayout {
+        x: 88px;
+        y: 14px;
+        width: parent.width - 160px;
+        height: 58px;
+        spacing: 3px;
+
+        Text {
+            text: root.playing ? "Now playing · " + root.player : "Audio preview · " + root.player;
+            color: #9fc2ff;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        Text {
+            text: root.title;
+            color: #f5f7fc;
+            font-size: 16px;
+            font-weight: 600;
+            overflow: elide;
+        }
+
+        Text {
+            text: root.artist + (root.album == "" ? "" : "  ·  " + root.album);
+            color: #91a0b8;
+            font-size: 13px;
+            overflow: elide;
+        }
+    }
+
+    // Pause and Play Button
+    // Rectangle {
+    //     x: parent.width - 62px;
+    //     y: 19px;
+    //     width: 48px;
+    //     height: 48px;
+    //     border-radius: 4px;
+    //     border-width: 1px;
+    //     border-color: #9fc2ff;
+
+    //     Text {
+    //         text: root.playing ? "||" : ">";
+    //         width: parent.width;
+    //         height: parent.height;
+    //         color: #9fc2ff;
+    //         font-size: root.playing ? 17px : 22px;
+    //         font-weight: 700;
+    //         horizontal-alignment: center;
+    //         vertical-alignment: center;
+    //     }
+
+    //     TouchArea {
+    //         clicked => { root.toggle(); }
+    //     }
+    // }
+
+    // Progress bar
+    Rectangle {
+        x: 14px;
+        y: parent.height - 18px;
+        width: parent.width * clamp(root.progress, 0.0, 1.0) - 28px;
+        height: 3px;
+        background: #9fc2ff;
+        border-radius: 1px;
+    }
+}
+
+component ExpandedPlayerPage inherits Rectangle {
+    in property <string> title;
+    in property <string> artist;
+    in property <string> album;
+    in property <string> player: "cadence";
+    in property <image> artwork;
+    in property <float> progress: 0.0;
+    in property <bool> playing: false;
+    property <length> player-drag-offset: 0px;
+    property <length> drag-start-y: 0px;
+    property <bool> dragging-player: false;
+    property <bool> player-was-dragged: false;
+    callback back();
+    callback toggle();
+
+    x: 0px;
+    y: root.player-drag-offset;
+    width: 100%;
+    height: 100%;
+    background: #18202de6;
+
+    Rectangle {
+        x: (parent.width - 48px) / 2;
+        y: 16px;
+        width: 48px;
+        height: 4px;
+        border-radius: 2px;
+        background: #91a0b8;
+    }
+
+    // Keep the drag target above the visual handle so mouse and touch input
+    // is captured by the gesture area itself.
+    TouchArea {
+        x: (parent.width - 120px) / 2;
+        y: 0px;
+        width: 120px;
+        height: 56px;
+
+        moved => {
+            if self.pressed {
+                if !root.dragging-player {
+                    root.drag-start-y = self.mouse-y;
+                    root.dragging-player = true;
+                }
+                root.player-was-dragged = true;
+                root.player-drag-offset = clamp(
+                    root.player-drag-offset + self.mouse-y - root.drag-start-y,
+                    0px,
+                    parent.height - 72px);
+            }
+        }
+
+        pointer-event(event) => {
+            if event.kind == PointerEventKind.down {
+                root.drag-start-y = self.mouse-y;
+                root.dragging-player = true;
+                root.player-was-dragged = false;
+            }
+            if event.kind == PointerEventKind.move {
+                if root.dragging-player {
+                    root.player-was-dragged = true;
+                    root.player-drag-offset = clamp(
+                        root.player-drag-offset + self.mouse-y - root.drag-start-y,
+                        0px,
+                        parent.height - 72px);
+                }
+            }
+            if event.kind == PointerEventKind.up {
+                if root.dragging-player {
+                    if root.player-drag-offset > parent.height * 0.35 {
+                        root.back();
+                    } else {
+                        root.player-drag-offset = 0px;
+                    }
+                }
+                root.dragging-player = false;
+            }
+        }
+
+        clicked => {
+            if !root.player-was-dragged {
+                root.back();
+            }
+        }
+    }
+
+    Rectangle {
+        x: 0px;
+        y: 56px;
+        width: parent.width - 36px;
+        height: parent.height - 72px;
+        background: transparent;
+
+        VerticalLayout {
+            padding-left: 18px;
+            padding-right: 18px;
+            padding-top: 22px;
+            padding-bottom: 24px;
+            spacing: 18px;
+
+            Text {
+                text: "Now playing · " + root.player;
+                width: parent.width;
+                color: #9fc2ff;
+                font-size: 14px;
+                font-weight: 700;
+                horizontal-alignment: center;
+            }
+
+            // Artwork
+            Rectangle {
+                width: parent.width;
+                height: self.width;
+                border-radius: 16px;
+                background: #26364d;
+                clip: true;
+
+                if root.artwork.width > 0: Image {
+                    source: root.artwork;
+                    width: parent.width;
+                    height: parent.height;
+                    image-fit: contain;
+                }
+
+                if root.artwork.width == 0: Text {
+                    text: "♪";
+                    width: parent.width;
+                    height: parent.height;
+                    color: #91a0b8;
+                    font-size: 96px;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+
+            // Song info
+            Text {
+                text: root.title;
+                width: parent.width;
+                color: #ffffff;
+                font-size: 25px;
+                font-weight: 700;
+                horizontal-alignment: center;
+                overflow: elide;
+            }
+
+            Text {
+                text: root.artist + (root.album == "" ? "" : "  ·  " + root.album);
+                width: parent.width;
+                color: #aebbd0;
+                font-size: 16px;
+                horizontal-alignment: center;
+                overflow: elide;
+            }
+
+            // Progress bar
+            Rectangle {
+                width: parent.width;
+                height: 4px;
+                background: #40516b;
+
+                Rectangle {
+                    x: 0px;
+                    width: parent.width * clamp(root.progress, 0.0, 1.0);
+                    height: parent.height;
+                    background: #9fc2ff;
+                }
+            }
+
+            // Play/Pause button
+            // Rectangle {
+            //     x: (parent.width - self.width) / 2;
+            //     width: 58px;
+            //     height: 58px;
+            //     border-radius: 29px;
+            //     background: #9fc2ff;
+
+            //     Text {
+            //         text: root.playing ? "||" : ">";
+            //         width: parent.width;
+            //         height: parent.height;
+            //         color: #18202d;
+            //         font-size: root.playing ? 20px : 28px;
+            //         font-weight: 700;
+            //         horizontal-alignment: center;
+            //         vertical-alignment: center;
+            //     }
+
+            //     TouchArea {
+            //         clicked => { root.toggle(); }
+            //     }
+            // }
+        }
     }
 }
 
@@ -387,62 +981,151 @@ export component MainWindow inherits Window {
 
     in-out property <string> current-page: "Home";
     in-out property <bool> immersive: false;
+    in-out property <bool> super-immersive: false;
+    in-out property <bool> player-expanded: false;
     property <int> music-volume: 58;
     property <int> headphones-volume: 42;
     property <int> other-volume: 25;
     property <bool> bluetooth-enabled: true;
+    in-out property <int> background-overlay-opacity: 25;
+    in-out property <string> now-playing-title: "Nothing playing";
+    in-out property <string> now-playing-artist: "Cadence";
+    in-out property <string> now-playing-album: "";
+    in-out property <string> now-playing-player: "cadence";
+    in-out property <bool> now-playing: false;
+    in-out property <image> now-playing-artwork;
+    in-out property <float> now-playing-progress: 0.0;
+    in-out property <image> background-image;
+    in-out property <[string]> background-options;
+    in-out property <string> background-name;
+    in-out property <[BackgroundEntry]> background-entries;
+    in-out property <[BackgroundEntry]> animated-background-entries;
+    in-out property <[BackgroundEntry]> still-background-entries;
+    in-out property <[BackgroundEntry]> pokemon-background-entries;
+    in-out property <[BackgroundEntry]> lifestyle-background-entries;
+    in-out property <[BackgroundEntry]> anime-background-entries;
     callback open-local-music();
     callback open-spotify();
     callback open-video();
+    callback background-selected(string);
+    callback background-overlay-opacity-changed(int);
+
+    Rectangle {
+        width: parent.width;
+        height: parent.height;
+        background: transparent;
+
+        Image {
+            source: root.background-image;
+            width: parent.width;
+            height: parent.height;
+        }
+
+        Rectangle {
+            width: parent.width;
+            height: parent.height;
+            background: #161b22.with-alpha(root.background-overlay-opacity / 100.0);
+        }
+
+        TouchArea {
+            width: parent.width;
+            height: parent.height;
+        }
+    }
+
+    ImmersiveToggle {
+        x: parent.width - self.width - 24px;
+        y: 24px;
+        immersive: root.immersive || root.super-immersive;
+        clicked => {
+            if root.super-immersive {
+                root.super-immersive = false;
+            } else {
+                root.immersive = !root.immersive;
+            }
+        }
+    }
+
+    if root.immersive: ImmersiveToggle {
+        x: parent.width - self.width - 24px;
+        y: 84px;
+        immersive: root.super-immersive;
+        clicked => {
+            if root.super-immersive {
+                root.super-immersive = false;
+            } else {
+                root.super-immersive = true;
+            }
+        }
+    }
 
     VerticalLayout {
         padding: 24px;
         spacing: 0px;
 
-        if !root.immersive: Rectangle {
+        if !root.super-immersive: Rectangle {
             if root.current-page == "Home": VerticalLayout {
                 spacing: 18px;
+                alignment: space-between;
+
                 PageHeader {
                     title: "MusicPi";
                     subtitle: "Your music. Your world.";
                 }
 
-                HorizontalLayout {
+                if !root.immersive: VerticalLayout {
                     spacing: 18px;
-                    AppTile {
-                        label: "Local Music";
-                        symbol: "♫";
-                        tint: #3e6fae;
-                        clicked => { root.current-page = "Local Music"; root.open-local-music(); }
+
+                    HorizontalLayout {
+                        spacing: 18px;
+                        AppTile {
+                            label: "Local Music";
+                            symbol: "♫";
+                            tint: #3e6fae;
+                            clicked => { root.current-page = "Local Music"; root.open-local-music(); }
+                        }
+
+                        AppTile {
+                            label: "Spotify";
+                            symbol: "S";
+                            tint: #25875b;
+                            clicked => { root.current-page = "Spotify"; root.open-spotify(); }
+                        }
                     }
 
-                    AppTile {
-                        label: "Spotify";
-                        symbol: "S";
-                        tint: #25875b;
-                        clicked => { root.current-page = "Spotify"; root.open-spotify(); }
+                    HorizontalLayout {
+                        spacing: 18px;
+                        AppTile {
+                            label: "Video";
+                            symbol: "▶";
+                            tint: #7458a8;
+                            clicked => { root.current-page = "Video"; root.open-video(); }
+                        }
+
+                        AppTile {
+                            label: "Settings";
+                            symbol: "...";
+                            tint: #a26642;
+                            clicked => { root.current-page = "Settings"; }
+                        }
                     }
                 }
 
-                HorizontalLayout {
-                    spacing: 18px;
-                    AppTile {
-                        label: "Video";
-                        symbol: "▶";
-                        tint: #7458a8;
-                        clicked => { root.current-page = "Video"; root.open-video(); }
-                    }
+                VerticalLayout {
+                    spacing: 10px;
 
-                    AppTile {
-                        label: "Settings";
-                        symbol: "...";
-                        tint: #a26642;
-                        clicked => { root.current-page = "Settings"; }
+                    NowPlayingPreview {
+                        width: 100%;
+                        title: root.now-playing-title;
+                        artist: root.now-playing-artist;
+                        album: root.now-playing-album;
+                        player: root.now-playing-player;
+                        artwork: root.now-playing-artwork;
+                        progress: root.now-playing-progress;
+                        playing: root.now-playing;
+                        open => { root.player-expanded = true; }
+                        toggle => {}
                     }
-                }
-
-                Rectangle {
-                    background: transparent;
                 }
             }
 
@@ -451,10 +1134,34 @@ export component MainWindow inherits Window {
                 headphones-volume: root.headphones-volume;
                 other-volume: root.other-volume;
                 bluetooth-enabled: root.bluetooth-enabled;
+                background-overlay-opacity: root.background-overlay-opacity;
+                background-options: root.background-options;
+                background-name: root.background-name;
                 music-volume-changed(value) => { root.music-volume = value; }
                 headphones-volume-changed(value) => { root.headphones-volume = value; }
                 other-volume-changed(value) => { root.other-volume = value; }
                 bluetooth-enabled-changed(value) => { root.bluetooth-enabled = value; }
+                background-selected(value) => { root.background-selected(value); }
+                background-overlay-opacity-changed(value) => {
+                    root.background-overlay-opacity = value;
+                    root.background-overlay-opacity-changed(value);
+                }
+                backgrounds-requested => { root.current-page = "Backgrounds"; }
+                back-requested => { root.current-page = "Home"; }
+            }
+
+            if root.current-page == "Backgrounds": BackgroundsPage {
+                animated-entries: root.animated-background-entries;
+                still-entries: root.still-background-entries;
+                pokemon-entries: root.pokemon-background-entries;
+                lifestyle-entries: root.lifestyle-background-entries;
+                anime-entries: root.anime-background-entries;
+                selected-name: root.background-name;
+                background-selected(value) => {
+                    root.background-selected(value);
+                    root.current-page = "Settings";
+                }
+                back-requested => { root.current-page = "Settings"; }
             }
 
             if root.current-page == "Local Music": PlaceholderPage {
@@ -481,5 +1188,17 @@ export component MainWindow inherits Window {
             height: 1px;
             background: transparent;
         }
+    }
+
+    if root.player-expanded: ExpandedPlayerPage {
+        title: root.now-playing-title;
+        artist: root.now-playing-artist;
+        album: root.now-playing-album;
+        player: root.now-playing-player;
+        artwork: root.now-playing-artwork;
+        progress: root.now-playing-progress;
+        playing: root.now-playing;
+        back => { root.player-expanded = false; }
+        toggle => {}
     }
 }

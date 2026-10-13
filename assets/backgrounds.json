@@ -1,0 +1,114 @@
+[
+  {
+    "name": "Wallpaper",
+    "source": "wallpaper.mp4",
+    "animated": true
+  },
+  {
+    "name": "Background",
+    "source": "background_1.mp4",
+    "animated": true
+  },
+  {
+    "name": "Anime 1",
+    "source": "backgrounds/anime_1.jpeg",
+    "animated": false,
+    "category": "anime"
+  },
+  {
+    "name": "Anime 2",
+    "source": "backgrounds/anime_2.jpeg",
+    "animated": false,
+    "category": "anime"
+  },
+  {
+    "name": "Lifestyle 1",
+    "source": "backgrounds/lifestyle_1.jpeg",
+    "animated": false,
+    "category": "lifestyle"
+  },
+  {
+    "name": "Lifestyle 2",
+    "source": "backgrounds/lifestyle_2.jpeg",
+    "animated": false,
+    "category": "lifestyle"
+  },
+  {
+    "name": "Lifestyle 3",
+    "source": "backgrounds/lifestyle_3.jpeg",
+    "animated": false,
+    "category": "lifestyle"
+  },
+  {
+    "name": "Lifestyle 4",
+    "source": "backgrounds/lifestyle_4.jpeg",
+    "animated": false,
+    "category": "lifestyle"
+  },
+  {
+    "name": "Lifestyle 5",
+    "source": "backgrounds/lifestyle_5.jpeg",
+    "animated": false,
+    "category": "lifestyle"
+  },
+  {
+    "name": "Lifestyle 6",
+    "source": "backgrounds/lifestyle_6.jpeg",
+    "animated": false,
+    "category": "lifestyle"
+  },
+  {
+    "name": "Lifestyle 7",
+    "source": "backgrounds/lifestyle_7.jpeg",
+    "animated": false,
+    "category": "lifestyle"
+  },
+  {
+    "name": "Lifestyle 8",
+    "source": "backgrounds/lifestyle_8.jpeg",
+    "animated": false,
+    "category": "lifestyle"
+  },
+  {
+    "name": "Lifestyle 9",
+    "source": "backgrounds/lifestyle_9.jpeg",
+    "animated": false,
+    "category": "lifestyle"
+  },
+  {
+    "name": "Lifestyle 10",
+    "source": "backgrounds/lifestyle_10.jpeg",
+    "animated": false,
+    "category": "lifestyle"
+  },
+  {
+    "name": "Pokemon 1",
+    "source": "backgrounds/pokemon_1.jpeg",
+    "animated": false,
+    "category": "pokemon"
+  },
+  {
+    "name": "Pokemon 2",
+    "source": "backgrounds/pokemon_2.jpeg",
+    "animated": false,
+    "category": "pokemon"
+  },
+  {
+    "name": "Pokemon 3",
+    "source": "backgrounds/pokemon_3.jpeg",
+    "animated": false,
+    "category": "pokemon"
+  },
+  {
+    "name": "Pokemon 4",
+    "source": "backgrounds/pokemon_4.jpeg",
+    "animated": false,
+    "category": "pokemon"
+  },
+  {
+    "name": "Pokemon 5",
+    "source": "backgrounds/pokemon_5.jpeg",
+    "animated": false,
+    "category": "pokemon"
+  }
+]

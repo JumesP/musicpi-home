@@ -11,11 +11,24 @@ slint = { version = "1.18", default-features = false, features = [
     "compat-1-2",
     "backend-winit",
     "renderer-software",
+    "raw-window-handle-06",
+    "unstable-winit-030",
 ] }
 i-slint-backend-winit = { version = "1.18", default-features = false, features = [
     "renderer-software",
 ] }
 winit = "0.30"
+raw-window-handle = "0.6"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+image = "0.25"
+reqwest = { version = "0.12", default-features = false, features = [
+    "blocking",
+    "rustls-tls",
+] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+x11rb = "0.13"
 
 [features]
 default = ["desktop"]
