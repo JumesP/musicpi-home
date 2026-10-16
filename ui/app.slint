@@ -1165,7 +1165,7 @@ export component MainWindow inherits Window {
         "Lost in the Music",
         "Now Streaming",
     ];
-    property <int> subtitle-index: 0;
+    in-out property <int> subtitle-index: 0;
     property <int> music-volume: 58;
     property <int> headphones-volume: 42;
     property <int> other-volume: 25;
@@ -1193,17 +1193,6 @@ export component MainWindow inherits Window {
     callback background-overlay-opacity-changed(int);
     callback video-speed-percent-changed(int);
 
-    Timer {
-        interval: 5s;
-        running: true;
-        triggered => {
-            root.subtitle-index = Math.mod(
-                root.subtitle-index + 1,
-                root.subtitle-phrases.length
-            );
-        }
-    }
-
     Rectangle {
         width: parent.width;
         height: parent.height;
@@ -1213,6 +1202,7 @@ export component MainWindow inherits Window {
             source: root.background-image;
             width: parent.width;
             height: parent.height;
+            image-fit: cover;
         }
 
         Rectangle {

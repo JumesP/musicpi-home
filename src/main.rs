@@ -578,6 +578,12 @@ fn main() -> Result<(), slint::PlatformError> {
         .map_err(|error| slint::PlatformError::from(error.to_string()))?;
 
     let window = MainWindow::new()?;
+    let phrase_count = 15u32;
+    let phrase_index = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|duration| (duration.as_nanos() % u128::from(phrase_count)) as i32)
+        .unwrap_or(0);
+    window.set_subtitle_index(phrase_index);
     let backgrounds = load_backgrounds().map_err(slint::PlatformError::from)?;
     let background_by_name = backgrounds
         .iter()
