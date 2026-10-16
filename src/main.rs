@@ -66,7 +66,33 @@ struct BackgroundProcess {
 
 fn open_local_music() {}
 
+fn cadence_is_running() -> Result<bool, String> {
+    let status = Command::new("pgrep")
+        .args(["-f", "[c]adence"])
+        .status()
+        .map_err(|error| format!("Failed to check whether Cadence is running: {error}"))?;
+
+    match status.code() {
+        Some(0) => Ok(true),
+        Some(1) => Ok(false),
+        Some(code) => Err(format!("Cadence process check exited with status {code}")),
+        None => Err("Cadence process check was terminated by a signal".to_string()),
+    }
+}
+
 fn open_spotify() {
+    match cadence_is_running() {
+        Ok(true) => {
+            println!("Cadence is already running.");
+            return;
+        }
+        Ok(false) => {}
+        Err(error) => {
+            eprintln!("{error}");
+            return;
+        }
+    }
+
     match Command::new("/home/pi/cadence/launch-cadence.sh").spawn() {
         Ok(_) => println!("Launching Cadence..."),
         Err(error) => eprintln!("Failed to launch Cadence: {error}"),

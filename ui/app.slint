@@ -1,5 +1,6 @@
 component AppTile inherits Rectangle {
     in property <string> symbol;
+    in property <image> icon;
     in property <string> label;
     in property <color> tint;
     callback clicked();
@@ -20,13 +21,21 @@ component AppTile inherits Rectangle {
             height: 100px;
             alignment: center;
 
+            // App icon or symbol
             Rectangle {
                 width: 100px;
                 height: 100px;
                 border-radius: 28px;
                 background: root.tint;
 
-                Text {
+                if root.icon.width > 0: Image {
+                    source: root.icon;
+                    width: 100%;
+                    height: 100%;
+                    image-fit: contain;
+                }
+
+                if root.icon.width == 0: Text {
                     width: 100%;
                     height: 100%;
                     text: root.symbol;
@@ -38,6 +47,7 @@ component AppTile inherits Rectangle {
             }
         }
 
+        // App label
         Text {
             width: 100%;
             text: root.label;
@@ -1080,14 +1090,14 @@ export component MainWindow inherits Window {
                         spacing: 18px;
                         AppTile {
                             label: "Local Music";
-                            symbol: "♫";
+                            icon: @image-url("../assets/app_icons/music-removebg-preview.png");
                             tint: #3e6fae;
                             clicked => { root.current-page = "Local Music"; root.open-local-music(); }
                         }
 
                         AppTile {
                             label: "Spotify";
-                            symbol: "S";
+                            icon: @image-url("../assets/app_icons/Spotify_App_Logo.png");
                             tint: #25875b;
                             clicked => { root.current-page = "Spotify"; root.open-spotify(); }
                         }
@@ -1097,14 +1107,14 @@ export component MainWindow inherits Window {
                         spacing: 18px;
                         AppTile {
                             label: "Video";
-                            symbol: "▶";
+                            icon: @image-url("../assets/app_icons/video.png");
                             tint: #7458a8;
                             clicked => { root.current-page = "Video"; root.open-video(); }
                         }
 
                         AppTile {
                             label: "Settings";
-                            symbol: "...";
+                            icon: @image-url("../assets/app_icons/settings.png");
                             tint: #a26642;
                             clicked => { root.current-page = "Settings"; }
                         }
