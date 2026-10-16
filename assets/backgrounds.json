@@ -82,6 +82,30 @@
     "category": "lifestyle"
   },
   {
+    "name": "Lifestyle 11",
+    "source": "backgrounds/lifestyle_11.jpg",
+    "animated": false,
+    "category": "lifestyle"
+  },
+  {
+    "name": "Lifestyle 12",
+    "source": "backgrounds/lifestyle_12.jpg",
+    "animated": false,
+    "category": "lifestyle"
+  },
+  {
+    "name": "Lifestyle 13",
+    "source": "backgrounds/lifestyle_13.jpg",
+    "animated": false,
+    "category": "lifestyle"
+  },
+  {
+    "name": "Lifestyle 14",
+    "source": "backgrounds/lifestyle_14.jpg",
+    "animated": false,
+    "category": "lifestyle"
+  },
+  {
     "name": "Pokemon 1",
     "source": "backgrounds/pokemon_1.jpeg",
     "animated": false,
@@ -110,5 +134,155 @@
     "source": "backgrounds/pokemon_5.jpeg",
     "animated": false,
     "category": "pokemon"
+  },
+  {
+    "name": "Library 1",
+    "source": "backgrounds/library_1.jpg",
+    "animated": false,
+    "category": "library"
+  },
+  {
+    "name": "Library 2",
+    "source": "backgrounds/library_2.jpg",
+    "animated": false,
+    "category": "library"
+  },
+  {
+    "name": "Library 3",
+    "source": "backgrounds/library_3.jpg",
+    "animated": false,
+    "category": "library"
+  },
+  {
+    "name": "Library 4",
+    "source": "backgrounds/library_4.jpg",
+    "animated": false,
+    "category": "library"
+  },
+  {
+    "name": "Library 5",
+    "source": "backgrounds/library_5.jpg",
+    "animated": false,
+    "category": "library"
+  },
+  {
+    "name": "Library 6",
+    "source": "backgrounds/library_6.jpg",
+    "animated": false,
+    "category": "library"
+  },
+  {
+    "name": "Hamster 1",
+    "source": "backgrounds/hamster_1.png",
+    "animated": false,
+    "category": "hamster"
+  },
+  {
+    "name": "Hamster 2",
+    "source": "backgrounds/hamster_2.jpg",
+    "animated": false,
+    "category": "hamster"
+  },
+  {
+    "name": "Hamster 3",
+    "source": "backgrounds/hamster_3.jpg",
+    "animated": false,
+    "category": "hamster"
+  },
+  {
+    "name": "Hamster 4",
+    "source": "backgrounds/hamster_4.jpg",
+    "animated": false,
+    "category": "hamster"
+  },
+  {
+    "name": "Hamster 5",
+    "source": "backgrounds/hamster_5.jpg",
+    "animated": false,
+    "category": "hamster"
+  },
+  {
+    "name": "Hamster 6",
+    "source": "backgrounds/hamster_6.jpg",
+    "animated": false,
+    "category": "hamster"
+  },
+    {
+    "name": "Chess 1",
+    "source": "backgrounds/chess_1.jpg",
+    "animated": false,
+    "category": "chess"
+  },
+  {
+    "name": "Chess 2",
+    "source": "backgrounds/chess_2.jpg",
+    "animated": false,
+    "category": "chess"
+  },
+  {
+    "name": "Chess 3",
+    "source": "backgrounds/chess_3.jpg",
+    "animated": false,
+    "category": "chess"
+  },
+  {
+    "name": "Chess 4",
+    "source": "backgrounds/chess_4.jpg",
+    "animated": false,
+    "category": "chess"
+  },
+  {
+    "name": "Cars 5",
+    "source": "backgrounds/cars_5.jpg",
+    "animated": false,
+    "category": "cars"
+  },
+  {
+    "name": "Cars 1",
+    "source": "backgrounds/cars_1.jpg",
+    "animated": false,
+    "category": "cars"
+  },
+  {
+    "name": "Cars 2",
+    "source": "backgrounds/cars_2.jpg",
+    "animated": false,
+    "category": "cars"
+  },
+  {
+    "name": "Cars 3",
+    "source": "backgrounds/cars_3.jpg",
+    "animated": false,
+    "category": "cars"
+  },
+  {
+    "name": "Cars 4",
+    "source": "backgrounds/cars_4.jpg",
+    "animated": false,
+    "category": "cars"
+  },
+  {
+    "name": "Tate 1",
+    "source": "backgrounds/tate_1.jpg",
+    "animated": false,
+    "category": "tate"
+  },
+  {
+    "name": "Tate 2",
+    "source": "backgrounds/tate_2.jpg",
+    "animated": false,
+    "category": "tate"
+  },
+  {
+    "name": "Tate 3",
+    "source": "backgrounds/tate_3.jpg",
+    "animated": false,
+    "category": "tate"
+  },
+  {
+    "name": "Tate 4",
+    "source": "backgrounds/tate_4.jpg",
+    "animated": false,
+    "category": "tate"
   }
 ]

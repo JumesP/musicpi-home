@@ -1,21 +1,15 @@
 use std::{
     cell::RefCell,
     collections::HashMap,
+    io::Read,
     path::{Path, PathBuf},
-    process::{Child, Command},
+    process::{Child, Command, Stdio},
     rc::Rc,
+    sync::mpsc::{self, Receiver, SyncSender},
 };
 
 use serde::Deserialize;
 use slint::{Image, ModelRc, SharedPixelBuffer, SharedString, Timer, TimerMode, VecModel};
-
-#[cfg(target_os = "linux")]
-use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-#[cfg(target_os = "linux")]
-use slint::winit_030::WinitWindowAccessor;
-
-#[cfg(target_os = "linux")]
-use x11rb::connection::Connection;
 
 slint::include_modules!();
 
@@ -36,6 +30,8 @@ struct DeviceSettings {
     selected_background: String,
     #[serde(default = "default_overlay_opacity")]
     background_overlay_opacity: i32,
+    #[serde(default = "default_video_speed")]
+    video_speed_percent: i32,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -60,8 +56,19 @@ fn default_player() -> String {
     "cadence".to_string()
 }
 
+fn default_video_speed() -> i32 {
+    100
+}
+
 struct BackgroundProcess {
     child: Child,
+    frames: Option<Receiver<VideoFrame>>,
+}
+
+struct VideoFrame {
+    pixels: Vec<u8>,
+    width: u32,
+    height: u32,
 }
 
 fn open_local_music() {}
@@ -128,14 +135,12 @@ fn load_backgrounds() -> Result<Vec<BackgroundDefinition>, String> {
 
     if backgrounds.iter().any(|background| {
         !background.animated
-            && !matches!(
-                background.category.as_deref(),
-                Some("pokemon" | "lifestyle" | "anime")
-            )
+            && background
+                .category
+                .as_deref()
+                .is_none_or(|category| category.trim().is_empty())
     }) {
-        return Err(
-            "Still backgrounds must have a pokemon, lifestyle, or anime category".to_string(),
-        );
+        return Err("Still backgrounds must have a non-empty category".to_string());
     }
 
     Ok(backgrounds)
@@ -271,10 +276,11 @@ fn load_device_settings() -> DeviceSettings {
         .unwrap_or(DeviceSettings {
             selected_background: String::new(),
             background_overlay_opacity: default_overlay_opacity(),
+            video_speed_percent: default_video_speed(),
         })
 }
 
-fn save_device_settings(name: &str, background_overlay_opacity: i32) {
+fn save_device_settings(name: &str, background_overlay_opacity: i32, video_speed_percent: i32) {
     let path = match settings_path() {
         Ok(path) => path,
         Err(error) => {
@@ -294,6 +300,7 @@ fn save_device_settings(name: &str, background_overlay_opacity: i32) {
     let contents = match serde_json::to_string_pretty(&DeviceSettings {
         selected_background: name.to_string(),
         background_overlay_opacity,
+        video_speed_percent,
     }) {
         Ok(contents) => contents,
         Err(error) => {
@@ -351,22 +358,23 @@ fn is_video(path: &Path) -> bool {
     )
 }
 
-fn mpv_candidates() -> Vec<PathBuf> {
+fn ffmpeg_candidates() -> Vec<PathBuf> {
     let mut candidates = Vec::new();
-    if let Ok(path) = std::env::var("MUSICPI_MPV") {
+    if let Ok(path) = std::env::var("MUSICPI_FFMPEG") {
         candidates.push(PathBuf::from(path));
     }
     candidates.extend([
-        PathBuf::from("mpv"),
-        PathBuf::from("/opt/homebrew/bin/mpv"),
-        PathBuf::from("/usr/local/bin/mpv"),
-        PathBuf::from("/usr/bin/mpv"),
+        PathBuf::from("ffmpeg"),
+        PathBuf::from("/opt/homebrew/bin/ffmpeg"),
+        PathBuf::from("/usr/local/bin/ffmpeg"),
+        PathBuf::from("/usr/bin/ffmpeg"),
     ]);
     candidates
 }
 
 fn stop_background(process: &mut Option<BackgroundProcess>) {
     if let Some(mut process) = process.take() {
+        drop(process.frames.take());
         if let Err(error) = process.child.kill() {
             eprintln!("Failed to stop background video: {error}");
         }
@@ -376,34 +384,151 @@ fn stop_background(process: &mut Option<BackgroundProcess>) {
     }
 }
 
-#[cfg(target_os = "linux")]
-fn x11_root_window(window: &MainWindow) -> Result<u32, String> {
-    let parent = window
-        .window()
-        .with_winit_window(|winit_window| {
-            let handle = winit_window
-                .window_handle()
-                .map_err(|error| format!("Cannot get app window handle: {error}"))?;
+fn start_video(path: &Path, video_speed_percent: i32) -> Result<(Child, Receiver<VideoFrame>), String> {
+    const WIDTH: u32 = 854;
+    const HEIGHT: u32 = 480;
+    const FRAME_BYTES: usize = WIDTH as usize * HEIGHT as usize * 4;
 
-            match handle.as_raw() {
-                RawWindowHandle::Xlib(handle) => Ok(handle.window as u32),
-                RawWindowHandle::Xcb(handle) => Ok(handle.window.get()),
-                _ => Err("MPV background embedding requires an X11 window".to_string()),
+    let (sender, receiver): (SyncSender<VideoFrame>, Receiver<VideoFrame>) = mpsc::sync_channel(2);
+    let mut last_error = None;
+
+    for candidate in ffmpeg_candidates() {
+        let mut command = Command::new(&candidate);
+        let child = command
+            .args([
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-stream_loop",
+                "-1",
+                "-i",
+            ])
+            .arg(path)
+            .args([
+                "-vf",
+                "scale=854:480,fps=24",
+                "-f",
+                "rawvideo",
+                "-pix_fmt",
+                "rgba",
+                "-",
+            ])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn();
+
+        let mut child = match child {
+            Ok(child) => child,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                last_error = Some(error);
+                continue;
             }
-        })
-        .ok_or_else(|| "The app window is not ready for video embedding".to_string())??;
-    let (connection, screen_number) =
-        x11rb::connect(None).map_err(|error| format!("Cannot connect to X11: {error}"))?;
-    let screen = &connection.setup().roots[screen_number];
-    let _ = parent;
-    Ok(screen.root)
+            Err(error) => return Err(format!("Failed to start FFmpeg: {error}")),
+        };
+
+        let mut stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| "FFmpeg did not provide a video output stream".to_string())?;
+        std::thread::spawn(move || {
+            loop {
+                let mut pixels = vec![0; FRAME_BYTES];
+                if stdout.read_exact(&mut pixels).is_err() {
+                    break;
+                }
+                if sender
+                    .send(VideoFrame {
+                        pixels,
+                        width: WIDTH,
+                        height: HEIGHT,
+                    })
+                    .is_err()
+                {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_secs_f64(
+                    100.0 / (24.0 * f64::from(video_speed_percent)),
+                ));
+            }
+        });
+
+        return Ok((child, receiver));
+    }
+
+    let error = last_error.expect("FFmpeg candidates should not be empty");
+    Err(format!(
+        "Unable to start FFmpeg: {error}. Install ffmpeg or set MUSICPI_FFMPEG to its executable path."
+    ))
+}
+
+fn video_preview(path: &Path) -> Result<Image, String> {
+    let mut last_error = None;
+    for candidate in ffmpeg_candidates() {
+        let output = Command::new(&candidate)
+            .args(["-hide_banner", "-loglevel", "error", "-i"])
+            .arg(path)
+            .args([
+                "-frames:v",
+                "1",
+                "-vf",
+                "scale=854:480",
+                "-f",
+                "image2pipe",
+                "-vcodec",
+                "png",
+                "-",
+            ])
+            .output();
+
+        match output {
+            Ok(output) if output.status.success() && !output.stdout.is_empty() => {
+                let decoded = image::load_from_memory(&output.stdout)
+                    .map_err(|error| format!("Could not decode video preview: {error}"))?
+                    .into_rgba8();
+                return Ok(Image::from_rgba8(SharedPixelBuffer::clone_from_slice(
+                    decoded.as_raw(),
+                    decoded.width(),
+                    decoded.height(),
+                )));
+            }
+            Ok(output) => {
+                return Err(format!(
+                    "FFmpeg could not create a preview for {} (status {})",
+                    path.display(),
+                    output.status
+                ));
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                last_error = Some(error);
+            }
+            Err(error) => return Err(format!("Failed to create video preview: {error}")),
+        }
+    }
+
+    let error = last_error.expect("FFmpeg candidates should not be empty");
+    Err(format!(
+        "Unable to create video preview: {error}. Install ffmpeg or set MUSICPI_FFMPEG to its executable path."
+    ))
+}
+
+fn update_video_frame(window: &MainWindow, process: &Rc<RefCell<Option<BackgroundProcess>>>) {
+    let frame = process
+        .borrow()
+        .as_ref()
+        .and_then(|process| process.frames.as_ref())
+        .and_then(|receiver| receiver.try_iter().last());
+
+    if let Some(frame) = frame {
+        let buffer = SharedPixelBuffer::clone_from_slice(&frame.pixels, frame.width, frame.height);
+        window.set_background_image(Image::from_rgba8(buffer));
+    }
 }
 
 fn apply_background(
     window: &MainWindow,
     background: &BackgroundDefinition,
     process: &Rc<RefCell<Option<BackgroundProcess>>>,
-    mpv_unavailable_reported: &Rc<RefCell<bool>>,
+    video_speed_percent: i32,
 ) {
     let path = match asset_path(&background.source) {
         Ok(path) => path,
@@ -413,68 +538,21 @@ fn apply_background(
         }
     };
 
-    stop_background(&mut process.borrow_mut());
-
     if is_video(&path) {
-        window.set_background_image(Image::default());
-        #[cfg(target_os = "linux")]
-        let window_id = match x11_root_window(window) {
-            Ok(window_id) => window_id.to_string(),
+        stop_background(&mut process.borrow_mut());
+        match start_video(&path, video_speed_percent) {
+            Ok((child, frames)) => {
+                *process.borrow_mut() = Some(BackgroundProcess {
+                    child,
+                    frames: Some(frames),
+                });
+            }
             Err(error) => {
-                eprintln!("Unable to embed the video background: {error}");
-                return;
+                eprintln!("Unable to play video background {}: {error}", path.display());
             }
-        };
-        #[cfg(not(target_os = "linux"))]
-        {
-            eprintln!("Video backgrounds are only supported as embedded backgrounds on Linux/X11.");
-            return;
-        }
-
-        let mut args = vec![
-            "--no-audio",
-            "--loop-file=inf",
-            "--force-window=no",
-            "--no-osc",
-            "--cursor-autohide=always",
-            "--input-conf=/dev/null",
-            "--no-input-default-bindings",
-        ];
-        #[cfg(target_os = "linux")]
-        args.push("--wid");
-
-        let mut last_error = None;
-
-        for candidate in mpv_candidates() {
-            let mut command = Command::new(&candidate);
-            command.args(&args);
-            #[cfg(target_os = "linux")]
-            command.arg(&window_id);
-            let child = command.arg(&path).spawn();
-            match child {
-                Ok(child) => {
-                    *process.borrow_mut() = Some(BackgroundProcess { child });
-                    return;
-                }
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                    last_error = Some(error);
-                }
-                Err(error) => {
-                    last_error = Some(error);
-                    break;
-                }
-            }
-        }
-
-        if !*mpv_unavailable_reported.borrow() {
-            let error = last_error.expect("mpv candidates should not be empty");
-            eprintln!(
-                "Unable to start the video background for {}: {error}. Install mpv or set MUSICPI_MPV to its executable path.",
-                path.display()
-            );
-            *mpv_unavailable_reported.borrow_mut() = true;
         }
     } else {
+        stop_background(&mut process.borrow_mut());
         match Image::load_from_path(&path) {
             Ok(image) => window.set_background_image(image),
             Err(error) => eprintln!(
@@ -507,7 +585,6 @@ fn main() -> Result<(), slint::PlatformError> {
         .map(|background| (background.name.clone(), background))
         .collect::<HashMap<_, _>>();
     let background_process = Rc::new(RefCell::new(None));
-    let mpv_unavailable_reported = Rc::new(RefCell::new(false));
     let image_loader = Rc::new(RefCell::new(
         ImageLoader::new().map_err(slint::PlatformError::from)?,
     ));
@@ -520,9 +597,14 @@ fn main() -> Result<(), slint::PlatformError> {
         .map(|background| {
             let path = asset_path(&background.source).ok();
             let preview = path
-                .filter(|path| !is_video(path))
                 .as_ref()
-                .and_then(|path| Image::load_from_path(path).ok())
+                .and_then(|path| {
+                    if is_video(path) {
+                        video_preview(path).ok()
+                    } else {
+                        Image::load_from_path(path).ok()
+                    }
+                })
                 .unwrap_or_default();
 
             BackgroundEntry {
@@ -543,13 +625,23 @@ fn main() -> Result<(), slint::PlatformError> {
         .filter(|entry| !entry.is_video)
         .cloned()
         .collect::<Vec<_>>();
-    let category_entries = |entries: &[BackgroundEntry], category: &str| {
-        entries
+    let mut still_categories = Vec::new();
+    for entry in &still_entries {
+        if !still_categories
             .iter()
-            .filter(|entry| entry.category == category)
-            .cloned()
-            .collect::<Vec<_>>()
-    };
+            .any(|category: &BackgroundCategory| category.name == entry.category)
+        {
+            let entries = still_entries
+                .iter()
+                .filter(|candidate| candidate.category == entry.category)
+                .cloned()
+                .collect::<Vec<_>>();
+            still_categories.push(BackgroundCategory {
+                name: entry.category.clone(),
+                entries: ModelRc::new(VecModel::from(entries)),
+            });
+        }
+    }
     let device_settings = load_device_settings();
     let selected_name = (!device_settings.selected_background.is_empty())
         .then_some(device_settings.selected_background.clone())
@@ -560,26 +652,16 @@ fn main() -> Result<(), slint::PlatformError> {
     window.set_background_entries(ModelRc::new(VecModel::from(background_entries)));
     window.set_animated_background_entries(ModelRc::new(VecModel::from(animated_entries)));
     window.set_still_background_entries(ModelRc::new(VecModel::from(still_entries.clone())));
-    window.set_pokemon_background_entries(ModelRc::new(VecModel::from(category_entries(
-        &still_entries,
-        "pokemon",
-    ))));
-    window.set_lifestyle_background_entries(ModelRc::new(VecModel::from(category_entries(
-        &still_entries,
-        "lifestyle",
-    ))));
-    window.set_anime_background_entries(ModelRc::new(VecModel::from(category_entries(
-        &still_entries,
-        "anime",
-    ))));
+    window.set_still_categories(ModelRc::new(VecModel::from(still_categories)));
     window.set_background_name(SharedString::from(selected_name.as_str()));
     window.set_background_overlay_opacity(device_settings.background_overlay_opacity.clamp(0, 100));
+    window.set_video_speed_percent(device_settings.video_speed_percent.clamp(25, 200));
     update_now_playing(&window, &mut image_loader.borrow_mut());
     apply_background(
         &window,
         &background_by_name[&selected_name],
         &background_process,
-        &mpv_unavailable_reported,
+        device_settings.video_speed_percent.clamp(25, 200),
     );
 
     window.on_open_local_music(open_local_music);
@@ -587,7 +669,6 @@ fn main() -> Result<(), slint::PlatformError> {
     window.on_open_video(open_video);
     let background_by_name_for_callback = background_by_name.clone();
     let background_process_for_callback = background_process.clone();
-    let mpv_unavailable_reported_for_callback = mpv_unavailable_reported.clone();
     let window_weak = window.as_weak();
     window.on_background_selected(move |name| {
         let name = name.to_string();
@@ -597,10 +678,14 @@ fn main() -> Result<(), slint::PlatformError> {
                     &window,
                     background,
                     &background_process_for_callback,
-                    &mpv_unavailable_reported_for_callback,
+                    window.get_video_speed_percent().clamp(25, 200),
                 );
                 window.set_background_name(SharedString::from(name.as_str()));
-                save_device_settings(&name, window.get_background_overlay_opacity());
+                save_device_settings(
+                    &name,
+                    window.get_background_overlay_opacity(),
+                    window.get_video_speed_percent(),
+                );
             }
         } else {
             eprintln!("Unknown background selected: {name}");
@@ -612,6 +697,25 @@ fn main() -> Result<(), slint::PlatformError> {
             save_device_settings(
                 &window.get_background_name().to_string(),
                 opacity.clamp(0, 100),
+                window.get_video_speed_percent(),
+            );
+        }
+    });
+    let speed_window_weak = window.as_weak();
+    let speed_background_by_name = background_by_name.clone();
+    let speed_process = background_process.clone();
+    window.on_video_speed_percent_changed(move |speed| {
+        if let Some(window) = speed_window_weak.upgrade() {
+            let speed = speed.clamp(25, 200);
+            window.set_video_speed_percent(speed);
+            let background_name = window.get_background_name().to_string();
+            if let Some(background) = speed_background_by_name.get(&background_name) {
+                apply_background(&window, background, &speed_process, speed);
+            }
+            save_device_settings(
+                &background_name,
+                window.get_background_overlay_opacity(),
+                speed,
             );
         }
     });
@@ -625,6 +729,18 @@ fn main() -> Result<(), slint::PlatformError> {
         move || {
             if let Some(window) = now_playing_window.upgrade() {
                 update_now_playing(&window, &mut now_playing_image_loader.borrow_mut());
+            }
+        },
+    );
+    let video_window = window.as_weak();
+    let video_process = background_process.clone();
+    let video_timer = Timer::default();
+    video_timer.start(
+        TimerMode::Repeated,
+        std::time::Duration::from_millis(42),
+        move || {
+            if let Some(window) = video_window.upgrade() {
+                update_video_frame(&window, &video_process);
             }
         },
     );

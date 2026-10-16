@@ -3,14 +3,25 @@ component AppTile inherits Rectangle {
     in property <image> icon;
     in property <string> label;
     in property <color> tint;
+    in property <brush> tile-background;
+    in property <color> icon-color: #ffffff;
+    in property <bool> colorize-icon: true;
     callback clicked();
 
     width: 267px;
     height: 236px;
-    background: #18202d;
-    border-radius: 22px;
+    // opacity: 0.75;
+    // background: root.tile-background;
+    // border-radius: 26px;
+    // border-width: 1px;
+    // border-color: #263247;
+    // clip: true;
+
+    // Base tile styling
+    background: #1e222d;
+    border-radius: 12px;
     border-width: 1px;
-    border-color: #314057;
+    border-color: rgba(255, 255, 255, 0.1);
 
     VerticalLayout {
         padding: 20px;
@@ -25,10 +36,19 @@ component AppTile inherits Rectangle {
             Rectangle {
                 width: 100px;
                 height: 100px;
-                border-radius: 28px;
-                background: root.tint;
+                border-radius: 24px;
+                // background: root.tile-background;
+                clip: true;
 
-                if root.icon.width > 0: Image {
+                if root.icon.width > 0 && root.colorize-icon: Image {
+                    source: root.icon;
+                    width: 100%;
+                    height: 100%;
+                    image-fit: contain;
+                    colorize: root.icon-color;
+                }
+
+                if root.icon.width > 0 && !root.colorize-icon: Image {
                     source: root.icon;
                     width: 100%;
                     height: 100%;
@@ -61,6 +81,98 @@ component AppTile inherits Rectangle {
 
     TouchArea {
         clicked => { root.clicked(); }
+    }
+}
+
+component AppTiles inherits VerticalLayout {
+    in-out property <string> current-page;
+    callback open-local-music();
+    callback open-spotify();
+    callback open-video();
+    callback open-settings();
+    spacing: 18px;
+
+    HorizontalLayout {
+        spacing: 18px;
+        AppTile {
+            label: "Local Music";
+            icon: @image-url("../assets/app_icons/music-removebg-preview.png");
+            tile-background: @linear-gradient(135deg, #1E3A8A, #172554);
+            icon-color: #ffffff;
+            clicked => { root.current-page = "Local Music"; root.open-local-music(); }
+        }
+
+        AppTile {
+            label: "Spotify";
+            icon: @image-url("../assets/app_icons/Spotify_App_Logo.png");
+            tile-background: #15803D;
+            icon-color: #ffffff;
+            colorize-icon: false;
+            clicked => { root.current-page = "Spotify"; root.open-spotify(); }
+        }
+    }
+
+    HorizontalLayout {
+        spacing: 18px;
+        AppTile {
+            label: "Video";
+            icon: @image-url("../assets/app_icons/video.png");
+            tile-background: @linear-gradient(135deg, #5B21B6, #3B0764);
+            icon-color: #ffffff;
+            clicked => { root.current-page = "Video"; root.open-video(); }
+        }
+
+        AppTile {
+            label: "Settings";
+            icon: @image-url("../assets/app_icons/settings.png");
+            tile-background: @linear-gradient(135deg, #334155, #0F172A);
+            icon-color: #ffffff;
+            clicked => { root.open-settings(); }
+        }
+    }
+}
+
+component AppTray inherits VerticalLayout {
+    in-out property <string> current-page;
+    callback open-local-music();
+    callback open-spotify();
+    callback open-video();
+    callback open-settings();
+    spacing: 18px;
+
+    HorizontalLayout {
+        AppTile {
+            label: "Local Music";
+            icon: @image-url("../assets/app_icons/music-removebg-preview.png");
+            tile-background: @linear-gradient(135deg, #1E3A8A, #172554);
+            icon-color: #ffffff;
+            clicked => { root.current-page = "Local Music"; root.open-local-music(); }
+        }
+
+        AppTile {
+            label: "Spotify";
+            icon: @image-url("../assets/app_icons/Spotify_App_Logo.png");
+            tile-background: #15803D;
+            icon-color: #ffffff;
+            colorize-icon: false;
+            clicked => { root.current-page = "Spotify"; root.open-spotify(); }
+        }
+
+        AppTile {
+            label: "Video";
+            icon: @image-url("../assets/app_icons/video.png");
+            tile-background: @linear-gradient(135deg, #5B21B6, #3B0764);
+            icon-color: #ffffff;
+            clicked => { root.current-page = "Video"; root.open-video(); }
+        }
+
+        AppTile {
+            label: "Settings";
+            icon: @image-url("../assets/app_icons/settings.png");
+            tile-background: @linear-gradient(135deg, #334155, #0F172A);
+            icon-color: #ffffff;
+            clicked => { root.current-page = "Settings"; }
+        }
     }
 }
 
@@ -251,6 +363,11 @@ struct BackgroundEntry {
     category: string,
 }
 
+struct BackgroundCategory {
+    name: string,
+    entries: [BackgroundEntry],
+}
+
 component BackgroundCard inherits Rectangle {
     in property <BackgroundEntry> entry;
     in property <bool> selected;
@@ -269,7 +386,8 @@ component BackgroundCard inherits Rectangle {
         y: 8px;
         width: parent.width - 16px;
         height: 132px;
-        visible: !root.entry.is-video;
+        image-fit: cover;
+        visible: root.entry.preview.width > 0;
     }
 
     Rectangle {
@@ -277,11 +395,11 @@ component BackgroundCard inherits Rectangle {
         y: 8px;
         width: parent.width - 16px;
         height: 132px;
-        background: root.entry.is-video ? #26364d : transparent;
-        visible: root.entry.is-video;
+        background: #26364d;
+        visible: root.entry.preview.width == 0;
 
         Text {
-            text: "▶";
+            text: root.entry.is-video ? "▶" : "?";
             color: #9fc2ff;
             font-size: 42px;
             horizontal-alignment: center;
@@ -321,6 +439,7 @@ component SettingsPage inherits Rectangle {
     in-out property <int> other-volume: 25;
     in-out property <bool> bluetooth-enabled: true;
     in-out property <int> background-overlay-opacity: 25;
+    in-out property <int> video-speed-percent: 100;
     in property <[string]> background-options;
     in property <string> background-name;
     callback music-volume-changed(int);
@@ -328,6 +447,7 @@ component SettingsPage inherits Rectangle {
     callback other-volume-changed(int);
     callback bluetooth-enabled-changed(bool);
     callback background-overlay-opacity-changed(int);
+    callback video-speed-percent-changed(int);
     callback background-selected(string);
     callback backgrounds-requested();
     callback back-requested();
@@ -361,95 +481,121 @@ component SettingsPage inherits Rectangle {
             }
         }
 
-        SettingsSection {
-            title: "AUDIO";
-        }
+        Flickable {
+            width: 100%;
+            vertical-stretch: 1;
+            interactive: true;
+            mouse-drag-pan-enabled: true;
+            content-width: parent.width;
+            content-height: 720px;
 
-        SettingStepper {
-            label: "Music volume";
-            detail: "Playback and local music";
-            value: root.music-volume;
-            value-changed(value) => { root.music-volume = value; root.music-volume-changed(value); }
-        }
+            VerticalLayout {
+                width: 100%;
+                height: 720px;
+                spacing: 9px;
 
-        SettingStepper {
-            label: "Headphones";
-            detail: "Headphone output level";
-            value: root.headphones-volume;
-            value-changed(value) => { root.headphones-volume = value; root.headphones-volume-changed(value); }
-        }
+                SettingsSection {
+                    title: "AUDIO";
+                }
 
-        SettingStepper {
-            label: "Other volume";
-            detail: "System sounds and alerts";
-            value: root.other-volume;
-            value-changed(value) => { root.other-volume = value; root.other-volume-changed(value); }
-        }
+                SettingStepper {
+                    label: "Music volume";
+                    detail: "Playback and local music";
+                    value: root.music-volume;
+                    value-changed(value) => { root.music-volume = value; root.music-volume-changed(value); }
+                }
 
-        SettingsSection {
-            title: "OUTPUT";
-        }
+                SettingStepper {
+                    label: "Headphones";
+                    detail: "Headphone output level";
+                    value: root.headphones-volume;
+                    value-changed(value) => { root.headphones-volume = value; root.headphones-volume-changed(value); }
+                }
 
-        SettingChoice {
-            label: "Background";
-            detail: "Choose an image or video wallpaper";
-            value: root.background-name;
-            selected: false;
-            clicked => { root.backgrounds-requested(); }
-        }
+                SettingStepper {
+                    label: "Other volume";
+                    detail: "System sounds and alerts";
+                    value: root.other-volume;
+                    value-changed(value) => { root.other-volume = value; root.other-volume-changed(value); }
+                }
 
-        SettingStepper {
-            label: "Background dimming";
-            detail: "Dark overlay for bright backgrounds";
-            value: root.background-overlay-opacity;
-            step: 5;
-            value-changed(value) => {
-                root.background-overlay-opacity = value;
-                root.background-overlay-opacity-changed(value);
+                SettingsSection {
+                    title: "OUTPUT";
+                }
+
+                SettingChoice {
+                    label: "Background";
+                    detail: "Choose an image or video wallpaper";
+                    value: root.background-name;
+                    selected: false;
+                    clicked => { root.backgrounds-requested(); }
+                }
+
+                SettingStepper {
+                    label: "Background dimming";
+                    detail: "Dark overlay for bright backgrounds";
+                    value: root.background-overlay-opacity;
+                    step: 5;
+                    value-changed(value) => {
+                        root.background-overlay-opacity = value;
+                        root.background-overlay-opacity-changed(value);
+                    }
+                }
+
+                SettingStepper {
+                    label: "Video speed";
+                    detail: "Wallpaper playback speed";
+                    value: root.video-speed-percent;
+                    step: 5;
+                    value-changed(value) => {
+                        root.video-speed-percent = value;
+                        root.video-speed-percent-changed(value);
+                    }
+                }
+
+                SettingChoice {
+                    label: "Playing device";
+                    detail: "Where audio is sent right now";
+                    value: "Headphones";
+                    clicked => {}
+                }
+
+                SettingChoice {
+                    label: "Bluetooth audio";
+                    detail: root.bluetooth-enabled ? "Ready to connect" : "Bluetooth is off";
+                    value: root.bluetooth-enabled ? "On" : "Off";
+                    clicked => { root.bluetooth-enabled = !root.bluetooth-enabled; root.bluetooth-enabled-changed(root.bluetooth-enabled); }
+                }
+
+                SettingsSection {
+                    title: "DEVICE";
+                }
+
+                SettingChoice {
+                    label: "Bluetooth devices";
+                    detail: "Pair and manage audio devices";
+                    value: "Manage";
+                    clicked => {}
+                }
+
+                SettingChoice {
+                    label: "Keyboard";
+                    detail: "Layout and key behaviour";
+                    value: "US English";
+                    clicked => {}
+                }
+
+                Rectangle {
+                    height: 1px;
+                    background: transparent;
+                }
+
+                Text {
+                    text: "System controls will connect to Raspberry Pi services here.";
+                    color: #71819a;
+                    font-size: 12px;
+                }
             }
-        }
-
-        SettingChoice {
-            label: "Playing device";
-            detail: "Where audio is sent right now";
-            value: "Headphones";
-            clicked => {}
-        }
-
-        SettingChoice {
-            label: "Bluetooth audio";
-            detail: root.bluetooth-enabled ? "Ready to connect" : "Bluetooth is off";
-            value: root.bluetooth-enabled ? "On" : "Off";
-            clicked => { root.bluetooth-enabled = !root.bluetooth-enabled; root.bluetooth-enabled-changed(root.bluetooth-enabled); }
-        }
-
-        SettingsSection {
-            title: "DEVICE";
-        }
-
-        SettingChoice {
-            label: "Bluetooth devices";
-            detail: "Pair and manage audio devices";
-            value: "Manage";
-            clicked => {}
-        }
-
-        SettingChoice {
-            label: "Keyboard";
-            detail: "Layout and key behaviour";
-            value: "US English";
-            clicked => {}
-        }
-
-        Rectangle {
-            height: 1px;
-            background: transparent;
-        }
-
-        Text {
-            text: "System controls will connect to Raspberry Pi services here.";
-            color: #71819a;
-            font-size: 12px;
         }
     }
 }
@@ -457,12 +603,15 @@ component SettingsPage inherits Rectangle {
 component BackgroundsPage inherits Rectangle {
     in property <[BackgroundEntry]> animated-entries;
     in property <[BackgroundEntry]> still-entries;
-    in property <[BackgroundEntry]> pokemon-entries;
-    in property <[BackgroundEntry]> lifestyle-entries;
-    in property <[BackgroundEntry]> anime-entries;
+    in property <[BackgroundCategory]> still-categories;
     in property <string> selected-name;
     property <bool> animated-tab: false;
-    property <string> still-category: "pokemon";
+    property <string> still-category: root.still-categories.length > 0
+        ? root.still-categories[0].name
+        : "";
+    property <[BackgroundEntry]> selected-still-entries: root.still-categories.length > 0
+        ? root.still-categories[0].entries
+        : [];
     callback background-selected(string);
     callback back-requested();
 
@@ -533,23 +682,35 @@ component BackgroundsPage inherits Rectangle {
             }
         }
 
-        if !root.animated-tab: HorizontalLayout {
+        if !root.animated-tab: Flickable {
+            width: 100%;
             height: 42px;
-            spacing: 8px;
+            interactive: true;
+            mouse-drag-pan-enabled: true;
+            content-width: root.still-categories.length * 158px;
+            content-height: 42px;
 
-            for category in ["pokemon", "lifestyle", "anime"]: Rectangle {
-                width: 150px;
-                border-radius: 12px;
-                background: root.still-category == category ? #9fc2ff : #26364d;
-                Text {
-                    text: category;
-                    color: root.still-category == category ? #101722 : #dce6f8;
-                    horizontal-alignment: center;
-                    vertical-alignment: center;
-                }
+            HorizontalLayout {
+                width: root.still-categories.length * 158px;
+                spacing: 8px;
 
-                TouchArea {
-                    clicked => { root.still-category = category; }
+                for category in root.still-categories: Rectangle {
+                    width: 150px;
+                    border-radius: 12px;
+                    background: root.still-category == category.name ? #9fc2ff : #26364d;
+                    Text {
+                        text: category.name;
+                        color: root.still-category == category.name ? #101722 : #dce6f8;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+
+                    TouchArea {
+                        clicked => {
+                            root.still-category = category.name;
+                            root.selected-still-entries = category.entries;
+                        }
+                    }
                 }
             }
         }
@@ -560,22 +721,16 @@ component BackgroundsPage inherits Rectangle {
             interactive: true;
             mouse-drag-pan-enabled: true;
             content-width: 514px;
-            content-height: root.animated-tab
-                ? 190px
-                : (root.still-category == "pokemon"
-                ? 598px
-                : (root.still-category == "lifestyle" ? 1006px : 190px));
+            content-height: ((root.animated-tab
+                ? root.animated-entries.length
+                : root.selected-still-entries.length) + 1) / 2 * 204px;
 
             grid := GridLayout {
                 width: 514px;
                 spacing: 14px;
                 for entry[index] in root.animated-tab
                     ? root.animated-entries
-                    : (root.still-category == "pokemon"
-                    ? root.pokemon-entries
-                    : (root.still-category == "lifestyle"
-                    ? root.lifestyle-entries
-                    : root.anime-entries)): BackgroundCard {
+                    : root.selected-still-entries: BackgroundCard {
                     col: index.mod(2);
                     row: index / 2;
                     entry: entry;
@@ -993,11 +1148,30 @@ export component MainWindow inherits Window {
     in-out property <bool> immersive: false;
     in-out property <bool> super-immersive: false;
     in-out property <bool> player-expanded: false;
+    property <[string]> subtitle-phrases: [
+        "Soundtrack to Your Day",
+        "Turn Up the Volume",
+        "Your Personal Jukebox",
+        "Press Play, Escape Reality",
+        "Rhythm & Energy",
+        "Press Play & Unwind",
+        "What Are We Listening To?",
+        "Tune In, Turn Up",
+        "Good Vibes Only",
+        "All Your Favorites, One Place",
+        "Set the Mood",
+        "Pure Audio Euphoria",
+        "Your Daily Soundtrack",
+        "Lost in the Music",
+        "Now Streaming",
+    ];
+    property <int> subtitle-index: 0;
     property <int> music-volume: 58;
     property <int> headphones-volume: 42;
     property <int> other-volume: 25;
     property <bool> bluetooth-enabled: true;
     in-out property <int> background-overlay-opacity: 25;
+    in-out property <int> video-speed-percent: 100;
     in-out property <string> now-playing-title: "Nothing playing";
     in-out property <string> now-playing-artist: "Cadence";
     in-out property <string> now-playing-album: "";
@@ -1011,14 +1185,24 @@ export component MainWindow inherits Window {
     in-out property <[BackgroundEntry]> background-entries;
     in-out property <[BackgroundEntry]> animated-background-entries;
     in-out property <[BackgroundEntry]> still-background-entries;
-    in-out property <[BackgroundEntry]> pokemon-background-entries;
-    in-out property <[BackgroundEntry]> lifestyle-background-entries;
-    in-out property <[BackgroundEntry]> anime-background-entries;
+    in-out property <[BackgroundCategory]> still-categories;
     callback open-local-music();
     callback open-spotify();
     callback open-video();
     callback background-selected(string);
     callback background-overlay-opacity-changed(int);
+    callback video-speed-percent-changed(int);
+
+    Timer {
+        interval: 5s;
+        running: true;
+        triggered => {
+            root.subtitle-index = Math.mod(
+                root.subtitle-index + 1,
+                root.subtitle-phrases.length
+            );
+        }
+    }
 
     Rectangle {
         width: parent.width;
@@ -1080,61 +1264,34 @@ export component MainWindow inherits Window {
 
                 PageHeader {
                     title: "MusicPi";
-                    subtitle: "Your music. Your world.";
-                }
-
-                if !root.immersive: VerticalLayout {
-                    spacing: 18px;
-
-                    HorizontalLayout {
-                        spacing: 18px;
-                        AppTile {
-                            label: "Local Music";
-                            icon: @image-url("../assets/app_icons/music-removebg-preview.png");
-                            tint: #3e6fae;
-                            clicked => { root.current-page = "Local Music"; root.open-local-music(); }
-                        }
-
-                        AppTile {
-                            label: "Spotify";
-                            icon: @image-url("../assets/app_icons/Spotify_App_Logo.png");
-                            tint: #25875b;
-                            clicked => { root.current-page = "Spotify"; root.open-spotify(); }
-                        }
-                    }
-
-                    HorizontalLayout {
-                        spacing: 18px;
-                        AppTile {
-                            label: "Video";
-                            icon: @image-url("../assets/app_icons/video.png");
-                            tint: #7458a8;
-                            clicked => { root.current-page = "Video"; root.open-video(); }
-                        }
-
-                        AppTile {
-                            label: "Settings";
-                            icon: @image-url("../assets/app_icons/settings.png");
-                            tint: #a26642;
-                            clicked => { root.current-page = "Settings"; }
-                        }
-                    }
+                    subtitle: root.subtitle-phrases[root.subtitle-index];
                 }
 
                 VerticalLayout {
-                    spacing: 10px;
+                    if !root.immersive: AppTiles {
+                        padding-bottom: 18px;
+                        current-page: root.current-page;
+                        open-local-music => { root.current-page = "Local Music"; root.open-local-music(); }
+                        open-spotify => { root.current-page = "Spotify"; root.open-spotify(); }
+                        open-video => { root.current-page = "Video"; root.open-video(); }
+                        open-settings => { root.current-page = "Settings"; }
+                    }
 
-                    NowPlayingPreview {
-                        width: 100%;
-                        title: root.now-playing-title;
-                        artist: root.now-playing-artist;
-                        album: root.now-playing-album;
-                        player: root.now-playing-player;
-                        artwork: root.now-playing-artwork;
-                        progress: root.now-playing-progress;
-                        playing: root.now-playing;
-                        open => { root.player-expanded = true; }
-                        toggle => {}
+                    VerticalLayout {
+                        spacing: 10px;
+
+                        NowPlayingPreview {
+                            width: 100%;
+                            title: root.now-playing-title;
+                            artist: root.now-playing-artist;
+                            album: root.now-playing-album;
+                            player: root.now-playing-player;
+                            artwork: root.now-playing-artwork;
+                            progress: root.now-playing-progress;
+                            playing: root.now-playing;
+                            open => { root.player-expanded = true; }
+                            toggle => {}
+                        }
                     }
                 }
             }
@@ -1145,6 +1302,7 @@ export component MainWindow inherits Window {
                 other-volume: root.other-volume;
                 bluetooth-enabled: root.bluetooth-enabled;
                 background-overlay-opacity: root.background-overlay-opacity;
+                video-speed-percent: root.video-speed-percent;
                 background-options: root.background-options;
                 background-name: root.background-name;
                 music-volume-changed(value) => { root.music-volume = value; }
@@ -1156,6 +1314,10 @@ export component MainWindow inherits Window {
                     root.background-overlay-opacity = value;
                     root.background-overlay-opacity-changed(value);
                 }
+                video-speed-percent-changed(value) => {
+                    root.video-speed-percent = value;
+                    root.video-speed-percent-changed(value);
+                }
                 backgrounds-requested => { root.current-page = "Backgrounds"; }
                 back-requested => { root.current-page = "Home"; }
             }
@@ -1163,9 +1325,7 @@ export component MainWindow inherits Window {
             if root.current-page == "Backgrounds": BackgroundsPage {
                 animated-entries: root.animated-background-entries;
                 still-entries: root.still-background-entries;
-                pokemon-entries: root.pokemon-background-entries;
-                lifestyle-entries: root.lifestyle-background-entries;
-                anime-entries: root.anime-background-entries;
+                still-categories: root.still-categories;
                 selected-name: root.background-name;
                 background-selected(value) => {
                     root.background-selected(value);
@@ -1180,12 +1340,14 @@ export component MainWindow inherits Window {
                 description: "Your local library will appear here when music services are connected.";
                 home-requested => { root.current-page = "Home"; }
             }
+
             if root.current-page == "Spotify": PlaceholderPage {
                 title: "Spotify";
                 symbol: "≋";
                 description: "Spotify controls are not connected yet. This space is ready for integration.";
                 home-requested => { root.current-page = "Home"; }
             }
+
             if root.current-page == "Video": PlaceholderPage {
                 title: "Video";
                 symbol: "▶";
