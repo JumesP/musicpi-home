@@ -32,6 +32,8 @@ struct DeviceSettings {
     background_overlay_opacity: i32,
     #[serde(default = "default_video_speed")]
     video_speed_percent: i32,
+    #[serde(default = "default_background_fit")]
+    background_fit: String,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -58,6 +60,10 @@ fn default_player() -> String {
 
 fn default_video_speed() -> i32 {
     100
+}
+
+fn default_background_fit() -> String {
+    "Stretch".to_string()
 }
 
 struct BackgroundProcess {
@@ -277,10 +283,16 @@ fn load_device_settings() -> DeviceSettings {
             selected_background: String::new(),
             background_overlay_opacity: default_overlay_opacity(),
             video_speed_percent: default_video_speed(),
+            background_fit: default_background_fit(),
         })
 }
 
-fn save_device_settings(name: &str, background_overlay_opacity: i32, video_speed_percent: i32) {
+fn save_device_settings(
+    name: &str,
+    background_overlay_opacity: i32,
+    video_speed_percent: i32,
+    background_fit: &str,
+) {
     let path = match settings_path() {
         Ok(path) => path,
         Err(error) => {
@@ -301,6 +313,7 @@ fn save_device_settings(name: &str, background_overlay_opacity: i32, video_speed
         selected_background: name.to_string(),
         background_overlay_opacity,
         video_speed_percent,
+        background_fit: background_fit.to_string(),
     }) {
         Ok(contents) => contents,
         Err(error) => {
@@ -662,6 +675,11 @@ fn main() -> Result<(), slint::PlatformError> {
     window.set_background_name(SharedString::from(selected_name.as_str()));
     window.set_background_overlay_opacity(device_settings.background_overlay_opacity.clamp(0, 100));
     window.set_video_speed_percent(device_settings.video_speed_percent.clamp(25, 200));
+    let background_fit = match device_settings.background_fit.as_str() {
+        "Crop" => "Crop",
+        _ => "Stretch",
+    };
+    window.set_background_fit(SharedString::from(background_fit));
     update_now_playing(&window, &mut image_loader.borrow_mut());
     apply_background(
         &window,
@@ -691,6 +709,7 @@ fn main() -> Result<(), slint::PlatformError> {
                     &name,
                     window.get_background_overlay_opacity(),
                     window.get_video_speed_percent(),
+                    &window.get_background_fit(),
                 );
             }
         } else {
@@ -704,6 +723,7 @@ fn main() -> Result<(), slint::PlatformError> {
                 &window.get_background_name().to_string(),
                 opacity.clamp(0, 100),
                 window.get_video_speed_percent(),
+                &window.get_background_fit(),
             );
         }
     });
@@ -722,6 +742,20 @@ fn main() -> Result<(), slint::PlatformError> {
                 &background_name,
                 window.get_background_overlay_opacity(),
                 speed,
+                &window.get_background_fit(),
+            );
+        }
+    });
+    let fit_window_weak = window.as_weak();
+    window.on_background_fit_changed(move |fit| {
+        if let Some(window) = fit_window_weak.upgrade() {
+            let fit = if fit == "Crop" { "Crop" } else { "Stretch" };
+            window.set_background_fit(SharedString::from(fit));
+            save_device_settings(
+                &window.get_background_name().to_string(),
+                window.get_background_overlay_opacity(),
+                window.get_video_speed_percent(),
+                fit,
             );
         }
     });

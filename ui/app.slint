@@ -440,6 +440,7 @@ component SettingsPage inherits Rectangle {
     in-out property <bool> bluetooth-enabled: true;
     in-out property <int> background-overlay-opacity: 25;
     in-out property <int> video-speed-percent: 100;
+    in-out property <string> background-fit: "Stretch";
     in property <[string]> background-options;
     in property <string> background-name;
     callback music-volume-changed(int);
@@ -448,6 +449,7 @@ component SettingsPage inherits Rectangle {
     callback bluetooth-enabled-changed(bool);
     callback background-overlay-opacity-changed(int);
     callback video-speed-percent-changed(int);
+    callback background-fit-changed(string);
     callback background-selected(string);
     callback backgrounds-requested();
     callback back-requested();
@@ -550,6 +552,16 @@ component SettingsPage inherits Rectangle {
                     value-changed(value) => {
                         root.video-speed-percent = value;
                         root.video-speed-percent-changed(value);
+                    }
+                }
+
+                SettingChoice {
+                    label: "Background fit";
+                    detail: "Stretch or crop wallpaper images";
+                    value: root.background-fit;
+                    clicked => {
+                        root.background-fit = root.background-fit == "Stretch" ? "Crop" : "Stretch";
+                        root.background-fit-changed(root.background-fit);
                     }
                 }
 
@@ -1172,6 +1184,7 @@ export component MainWindow inherits Window {
     property <bool> bluetooth-enabled: true;
     in-out property <int> background-overlay-opacity: 25;
     in-out property <int> video-speed-percent: 100;
+    in-out property <string> background-fit: "Stretch";
     in-out property <string> now-playing-title: "Nothing playing";
     in-out property <string> now-playing-artist: "Cadence";
     in-out property <string> now-playing-album: "";
@@ -1192,6 +1205,7 @@ export component MainWindow inherits Window {
     callback background-selected(string);
     callback background-overlay-opacity-changed(int);
     callback video-speed-percent-changed(int);
+    callback background-fit-changed(string);
 
     Rectangle {
         width: parent.width;
@@ -1202,7 +1216,7 @@ export component MainWindow inherits Window {
             source: root.background-image;
             width: parent.width;
             height: parent.height;
-            image-fit: cover;
+            image-fit: root.background-fit == "Crop" ? cover : fill;
         }
 
         Rectangle {
@@ -1293,6 +1307,7 @@ export component MainWindow inherits Window {
                 bluetooth-enabled: root.bluetooth-enabled;
                 background-overlay-opacity: root.background-overlay-opacity;
                 video-speed-percent: root.video-speed-percent;
+                background-fit: root.background-fit;
                 background-options: root.background-options;
                 background-name: root.background-name;
                 music-volume-changed(value) => { root.music-volume = value; }
@@ -1307,6 +1322,10 @@ export component MainWindow inherits Window {
                 video-speed-percent-changed(value) => {
                     root.video-speed-percent = value;
                     root.video-speed-percent-changed(value);
+                }
+                background-fit-changed(value) => {
+                    root.background-fit = value;
+                    root.background-fit-changed(value);
                 }
                 backgrounds-requested => { root.current-page = "Backgrounds"; }
                 back-requested => { root.current-page = "Home"; }
