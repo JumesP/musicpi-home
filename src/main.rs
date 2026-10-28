@@ -34,6 +34,8 @@ struct DeviceSettings {
     video_speed_percent: i32,
     #[serde(default = "default_background_fit")]
     background_fit: String,
+    #[serde(default)]
+    selected_audio_sink: String,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -77,7 +79,49 @@ struct VideoFrame {
     height: u32,
 }
 
-fn open_local_music() {}
+fn music_library_is_running() -> Result<bool, String> {
+    let status = Command::new("pgrep")
+        .args(["-f", "[/]home/pi/music-library/bin/ui"])
+        .status()
+        .map_err(|error| {
+            format!("Failed to check whether Music Library is running: {error}")
+        })?;
+
+    match status.code() {
+        Some(0) => Ok(true),
+        Some(1) => Ok(false),
+        Some(code) => Err(format!(
+            "Music Library process check exited with status {code}"
+        )),
+        None => Err(
+            "Music Library process check was terminated by a signal".to_string()
+        ),
+    }
+}
+
+fn open_local_music() {
+    match music_library_is_running() {
+        Ok(true) => {
+            println!("Music Library is already running.");
+            return;
+        }
+        Ok(false) => {}
+        Err(error) => {
+            eprintln!("{error}");
+            return;
+        }
+    }
+
+    match Command::new("/home/pi/music-library/bin/ui")
+        .current_dir("/home/pi/music-library")
+        .env("WAYLAND_DISPLAY", "wayland-0")
+        .env("XDG_RUNTIME_DIR", "/run/user/1000")
+        .spawn()
+    {
+        Ok(_) => println!("Launching Music Library..."),
+        Err(error) => eprintln!("Failed to launch Music Library: {error}"),
+    }
+}
 
 fn cadence_is_running() -> Result<bool, String> {
     let status = Command::new("pgrep")
@@ -205,7 +249,7 @@ impl ImageLoader {
         }
 
         let bytes = if source.starts_with("http://") || source.starts_with("https://") {
-            self.client
+self.client
                 .get(source)
                 .send()
                 .map_err(|error| format!("Could not download image {source}: {error}"))?
@@ -229,7 +273,7 @@ impl ImageLoader {
             decoded.height(),
         );
         let image = Image::from_rgba8(buffer);
-        self.cache.insert(source.to_string(), image.clone());
+self.cache.insert(source.to_string(), image.clone());
         Ok(image)
     }
 }
@@ -271,6 +315,104 @@ fn update_now_playing(window: &MainWindow, image_loader: &mut ImageLoader) {
     window.set_now_playing_progress(now_playing.progress.clamp(0.0, 1.0));
     window.set_now_playing(now_playing.playing);
 }
+#[derive(Clone, Debug)]
+struct AudioSink {
+    name: String,
+    label: String,
+}
+
+fn audio_sink_label(name: &str) -> String {
+    let lower = name.to_ascii_lowercase();
+    if lower.contains("hdmi") {
+        "HDMI".to_string()
+    } else if lower.contains("wm8960") || lower.contains("soc_sound") || lower.contains("stereo-fallback") {
+        "WM8960 / Headphones".to_string()
+    } else {
+        name.strip_prefix("alsa_output.")
+            .unwrap_or(name)
+            .replace('_', " ").replace('.', " ")
+    }
+}
+
+fn list_audio_sinks() -> Vec<AudioSink> {
+    let output = match Command::new("pactl").args(["list", "short", "sinks"]).output() {
+        Ok(output) if output.status.success() => output,
+        Ok(output) => {
+            eprintln!("Could not list audio outputs: {}", String::from_utf8_lossy(&output.stderr).trim());
+            return Vec::new();
+        }
+        Err(error) => {
+            eprintln!("Could not run pactl to list audio outputs: {error}");
+            return Vec::new();
+        }
+    };
+
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter_map(|line| {
+            let mut fields = line.split_whitespace();
+            let _id = fields.next()?;
+            let name = fields.next()?.to_string();
+            Some(AudioSink {
+                label: audio_sink_label(&name),
+                name,
+            })
+        })
+        .collect()
+}
+
+fn default_audio_sink() -> Option<String> {
+    let output = Command::new("pactl").args(["get-default-sink"]).output().ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let name = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    (!name.is_empty()).then_some(name)
+}
+
+/// Sets the system default and moves every currently active PipeWire/PulseAudio
+/// sink-input to the selected sink. Applications using direct ALSA bypass this layer.
+fn apply_audio_output(sink_name: &str) -> Result<(), String> {
+    let output = Command::new("pactl")
+        .args(["set-default-sink", sink_name])
+        .output()
+        .map_err(|error| format!("Could not run pactl: {error}"))?;
+    if !output.status.success() {
+        return Err(format!(
+            "Could not set default audio output to {sink_name}: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        ));
+    }
+
+    let inputs = Command::new("pactl")
+        .args(["list", "short", "sink-inputs"])
+        .output()
+        .map_err(|error| format!("Could not list active audio streams: {error}"))?;
+    if !inputs.status.success() {
+        return Err(format!(
+            "Could not list active audio streams: {}",
+            String::from_utf8_lossy(&inputs.stderr).trim()
+        ));
+    }
+
+    for line in String::from_utf8_lossy(&inputs.stdout).lines() {
+        let Some(stream_id) = line.split_whitespace().next() else {
+            continue;
+        };
+        let moved = Command::new("pactl")
+            .args(["move-sink-input", stream_id, sink_name])
+            .output();
+        match moved {
+            Ok(result) if result.status.success() => {}
+            Ok(result) => eprintln!(
+                "Could not move audio stream {stream_id} to {sink_name}: {}",
+                String::from_utf8_lossy(&result.stderr).trim()
+            ),
+            Err(error) => eprintln!("Could not move audio stream {stream_id}: {error}"),
+        }
+    }
+    Ok(())
+}
 
 fn load_device_settings() -> DeviceSettings {
     let contents = settings_path()
@@ -284,6 +426,7 @@ fn load_device_settings() -> DeviceSettings {
             background_overlay_opacity: default_overlay_opacity(),
             video_speed_percent: default_video_speed(),
             background_fit: default_background_fit(),
+            selected_audio_sink: String::new(),
         })
 }
 
@@ -292,7 +435,12 @@ fn save_device_settings(
     background_overlay_opacity: i32,
     video_speed_percent: i32,
     background_fit: &str,
+    selected_audio_sink: Option<&str>,
 ) {
+    let existing_audio_sink = load_device_settings().selected_audio_sink;
+    let selected_audio_sink = selected_audio_sink
+        .map(str::to_string)
+        .unwrap_or(existing_audio_sink);
     let path = match settings_path() {
         Ok(path) => path,
         Err(error) => {
@@ -314,6 +462,7 @@ fn save_device_settings(
         background_overlay_opacity,
         video_speed_percent,
         background_fit: background_fit.to_string(),
+        selected_audio_sink,
     }) {
         Ok(contents) => contents,
         Err(error) => {
@@ -680,6 +829,32 @@ fn main() -> Result<(), slint::PlatformError> {
         _ => "Stretch",
     };
     window.set_background_fit(SharedString::from(background_fit));
+
+    let audio_sinks = list_audio_sinks();
+    let saved_sink = device_settings.selected_audio_sink.clone();
+    let selected_sink = audio_sinks
+        .iter()
+        .find(|sink| sink.name == saved_sink)
+        .map(|sink| sink.name.clone())
+        .or_else(default_audio_sink)
+        .or_else(|| audio_sinks.first().map(|sink| sink.name.clone()));
+    let current_audio_sink = Rc::new(RefCell::new(selected_sink.clone().unwrap_or_default()));
+    if let Some(selected_name) = selected_sink.as_deref() {
+        if !saved_sink.is_empty() && saved_sink == selected_name {
+            if let Err(error) = apply_audio_output(selected_name) {
+                eprintln!("Could not restore saved audio output: {error}");
+            }
+        }
+        let label = audio_sinks
+            .iter()
+            .find(|sink| sink.name == selected_name)
+            .map(|sink| sink.label.as_str())
+            .unwrap_or(selected_name);
+        window.set_audio_output(SharedString::from(label));
+    } else {
+        window.set_audio_output(SharedString::from("No outputs found"));
+    }
+
     update_now_playing(&window, &mut image_loader.borrow_mut());
     apply_background(
         &window,
@@ -710,6 +885,7 @@ fn main() -> Result<(), slint::PlatformError> {
                     window.get_background_overlay_opacity(),
                     window.get_video_speed_percent(),
                     &window.get_background_fit(),
+                    None,
                 );
             }
         } else {
@@ -724,6 +900,7 @@ fn main() -> Result<(), slint::PlatformError> {
                 opacity.clamp(0, 100),
                 window.get_video_speed_percent(),
                 &window.get_background_fit(),
+                None,
             );
         }
     });
@@ -743,6 +920,7 @@ fn main() -> Result<(), slint::PlatformError> {
                 window.get_background_overlay_opacity(),
                 speed,
                 &window.get_background_fit(),
+                None,
             );
         }
     });
@@ -756,7 +934,42 @@ fn main() -> Result<(), slint::PlatformError> {
                 window.get_background_overlay_opacity(),
                 window.get_video_speed_percent(),
                 fit,
+                None,
             );
+        }
+    });
+    let audio_window_weak = window.as_weak();
+    let current_audio_sink_for_callback = current_audio_sink.clone();
+    window.on_audio_output_requested(move || {
+        let Some(window) = audio_window_weak.upgrade() else {
+            return;
+        };
+        let available_sinks = list_audio_sinks();
+        if available_sinks.is_empty() {
+            eprintln!("No audio outputs are available");
+            window.set_audio_output(SharedString::from("No outputs found"));
+            return;
+        }
+
+        let current = current_audio_sink_for_callback.borrow().clone();
+        let current_index = available_sinks
+            .iter()
+            .position(|sink| sink.name == current)
+            .unwrap_or(available_sinks.len() - 1);
+        let next = &available_sinks[(current_index + 1) % available_sinks.len()];
+        match apply_audio_output(&next.name) {
+            Ok(()) => {
+                *current_audio_sink_for_callback.borrow_mut() = next.name.clone();
+                window.set_audio_output(SharedString::from(next.label.as_str()));
+                save_device_settings(
+                    &window.get_background_name().to_string(),
+                    window.get_background_overlay_opacity(),
+                    window.get_video_speed_percent(),
+                    &window.get_background_fit(),
+                    Some(&next.name),
+                );
+            }
+            Err(error) => eprintln!("Could not change audio output: {error}"),
         }
     });
 

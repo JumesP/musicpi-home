@@ -441,6 +441,7 @@ component SettingsPage inherits Rectangle {
     in-out property <int> background-overlay-opacity: 25;
     in-out property <int> video-speed-percent: 100;
     in-out property <string> background-fit: "Stretch";
+    in property <string> audio-output;
     in property <[string]> background-options;
     in property <string> background-name;
     callback music-volume-changed(int);
@@ -450,6 +451,7 @@ component SettingsPage inherits Rectangle {
     callback background-overlay-opacity-changed(int);
     callback video-speed-percent-changed(int);
     callback background-fit-changed(string);
+    callback audio-output-requested();
     callback background-selected(string);
     callback backgrounds-requested();
     callback back-requested();
@@ -566,10 +568,11 @@ component SettingsPage inherits Rectangle {
                 }
 
                 SettingChoice {
-                    label: "Playing device";
-                    detail: "Where audio is sent right now";
-                    value: "Headphones";
-                    clicked => {}
+                    label: "Audio output";
+                    detail: "Switch all active system audio";
+                    value: root.audio-output;
+                    selected: false;
+                    clicked => { root.audio-output-requested(); }
                 }
 
                 SettingChoice {
@@ -1000,12 +1003,11 @@ component ExpandedPlayerPage inherits Rectangle {
                 }
                 root.player-was-dragged = true;
                 root.player-drag-offset = clamp(
-                    root.player-drag-offset + self.mouse-y - root.drag-start-y,
-                    0px,
-                    parent.height - 72px);
+                root.player-drag-offset + self.mouse-y - root.drag-start-y,
+                                    0px,
+                parent.height - 72px);
             }
         }
-
         pointer-event(event) => {
             if event.kind == PointerEventKind.down {
                 root.drag-start-y = self.mouse-y;
@@ -1185,6 +1187,7 @@ export component MainWindow inherits Window {
     in-out property <int> background-overlay-opacity: 25;
     in-out property <int> video-speed-percent: 100;
     in-out property <string> background-fit: "Stretch";
+    in-out property <string> audio-output: "";
     in-out property <string> now-playing-title: "Nothing playing";
     in-out property <string> now-playing-artist: "Cadence";
     in-out property <string> now-playing-album: "";
@@ -1206,7 +1209,7 @@ export component MainWindow inherits Window {
     callback background-overlay-opacity-changed(int);
     callback video-speed-percent-changed(int);
     callback background-fit-changed(string);
-
+    callback audio-output-requested();
     Rectangle {
         width: parent.width;
         height: parent.height;
@@ -1308,6 +1311,7 @@ export component MainWindow inherits Window {
                 background-overlay-opacity: root.background-overlay-opacity;
                 video-speed-percent: root.video-speed-percent;
                 background-fit: root.background-fit;
+                audio-output: root.audio-output;
                 background-options: root.background-options;
                 background-name: root.background-name;
                 music-volume-changed(value) => { root.music-volume = value; }
@@ -1327,6 +1331,7 @@ export component MainWindow inherits Window {
                     root.background-fit = value;
                     root.background-fit-changed(value);
                 }
+                audio-output-requested => { root.audio-output-requested(); }
                 backgrounds-requested => { root.current-page = "Backgrounds"; }
                 back-requested => { root.current-page = "Home"; }
             }
