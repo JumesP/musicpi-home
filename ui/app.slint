@@ -1,3 +1,18 @@
+import { ScrollView } from "std-widgets.slint";
+
+export struct AudioOutput {
+    name: string,
+    label: string,
+}
+
+export struct BluetoothDevice {
+    address: string,
+    name: string,
+    paired: bool,
+    connected: bool,
+    status: string,
+}
+
 component AppTile inherits Rectangle {
     in property <string> symbol;
     in property <image> icon;
@@ -434,24 +449,29 @@ component BackgroundCard inherits Rectangle {
 }
 
 component SettingsPage inherits Rectangle {
-    in-out property <int> music-volume: 58;
-    in-out property <int> headphones-volume: 42;
-    in-out property <int> other-volume: 25;
+    in-out property <int> system-volume: 58;
     in-out property <bool> bluetooth-enabled: true;
     in-out property <int> background-overlay-opacity: 25;
     in-out property <int> video-speed-percent: 100;
     in-out property <string> background-fit: "Stretch";
     in property <string> audio-output;
+    in property <[AudioOutput]> audio-outputs;
+    in property <[BluetoothDevice]> bluetooth-devices;
+    in property <[string]> audio-output-options;
+    in property <[string]> audio-output-sink-names;
     in property <[string]> background-options;
     in property <string> background-name;
-    callback music-volume-changed(int);
-    callback headphones-volume-changed(int);
-    callback other-volume-changed(int);
+
+    callback system-volume-changed(int);
     callback bluetooth-enabled-changed(bool);
     callback background-overlay-opacity-changed(int);
     callback video-speed-percent-changed(int);
     callback background-fit-changed(string);
     callback audio-output-requested();
+    callback audio-output-selected(string);
+    callback bluetooth-devices-refresh-requested();
+    callback bluetooth-device-selected(string);
+    callback bluetooth-manage-requested();
     callback background-selected(string);
     callback backgrounds-requested();
     callback back-requested();
@@ -485,17 +505,12 @@ component SettingsPage inherits Rectangle {
             }
         }
 
-        Flickable {
+        ScrollView {
             width: 100%;
             vertical-stretch: 1;
-            interactive: true;
-            mouse-drag-pan-enabled: true;
-            content-width: parent.width;
-            content-height: 720px;
 
             VerticalLayout {
                 width: 100%;
-                height: 720px;
                 spacing: 9px;
 
                 SettingsSection {
@@ -503,24 +518,14 @@ component SettingsPage inherits Rectangle {
                 }
 
                 SettingStepper {
-                    label: "Music volume";
-                    detail: "Playback and local music";
-                    value: root.music-volume;
-                    value-changed(value) => { root.music-volume = value; root.music-volume-changed(value); }
-                }
-
-                SettingStepper {
-                    label: "Headphones";
-                    detail: "Headphone output level";
-                    value: root.headphones-volume;
-                    value-changed(value) => { root.headphones-volume = value; root.headphones-volume-changed(value); }
-                }
-
-                SettingStepper {
-                    label: "Other volume";
-                    detail: "System sounds and alerts";
-                    value: root.other-volume;
-                    value-changed(value) => { root.other-volume = value; root.other-volume-changed(value); }
+                    label: "System volume";
+                    detail: "Controls the selected audio output";
+                    value: root.system-volume;
+                    step: 5;
+                    value-changed(value) => {
+                        root.system-volume = value;
+                        root.system-volume-changed(value);
+                    }
                 }
 
                 SettingsSection {
@@ -562,24 +567,84 @@ component SettingsPage inherits Rectangle {
                     detail: "Stretch or crop wallpaper images";
                     value: root.background-fit;
                     clicked => {
-                        root.background-fit = root.background-fit == "Stretch" ? "Crop" : "Stretch";
+                        root.background-fit = root.background-fit == "Stretch"
+                            ? "Crop"
+                            : "Stretch";
                         root.background-fit-changed(root.background-fit);
                     }
                 }
 
-                SettingChoice {
-                    label: "Audio output";
-                    detail: "Switch all active system audio";
-                    value: root.audio-output;
-                    selected: false;
-                    clicked => { root.audio-output-requested(); }
+                VerticalLayout {
+                    spacing: 8px;
+
+                    Text {
+                        text: "Audio output";
+                        color: #ffffff;
+                        font-size: 16px;
+                        font-weight: 600;
+                    }
+
+                    Text {
+                        text: "Choose where system audio is played";
+                        color: #9ca3af;
+                        font-size: 12px;
+                    }
+
+                    for output in root.audio-outputs: TouchArea {
+                        height: 56px;
+                        width: parent.width;
+
+                        clicked => {
+                            root.audio-output-selected(output.name);
+                        }
+
+                        Rectangle {
+                            background: output.label == root.audio-output
+                                ? #303744
+                                : #1c2028;
+                            border-radius: 10px;
+                            border-width: 1px;
+                            border-color: output.label == root.audio-output
+                                ? #64748b
+                                : #30343d;
+
+                            HorizontalLayout {
+                                width: parent.width - 32px;
+                                height: parent.height;
+                                x: 16px;
+                                alignment: center;
+                                spacing: 12px;
+
+                                Text {
+                                    text: output.label;
+                                    color: #ffffff;
+                                    font-size: 15px;
+                                    vertical-alignment: center;
+                                    horizontal-stretch: 1;
+                                    overflow: elide;
+                                }
+
+                                if output.label == root.audio-output: Text {
+                                    text: "✓";
+                                    color: #86efac;
+                                    font-size: 18px;
+                                    vertical-alignment: center;
+                                }
+                            }
+                        }
+                    }
                 }
 
                 SettingChoice {
                     label: "Bluetooth audio";
-                    detail: root.bluetooth-enabled ? "Ready to connect" : "Bluetooth is off";
+                    detail: root.bluetooth-enabled
+                        ? "Ready to connect"
+                        : "Bluetooth is off";
                     value: root.bluetooth-enabled ? "On" : "Off";
-                    clicked => { root.bluetooth-enabled = !root.bluetooth-enabled; root.bluetooth-enabled-changed(root.bluetooth-enabled); }
+                    clicked => {
+                        root.bluetooth-enabled = !root.bluetooth-enabled;
+                        root.bluetooth-enabled-changed(root.bluetooth-enabled);
+                    }
                 }
 
                 SettingsSection {
@@ -590,7 +655,7 @@ component SettingsPage inherits Rectangle {
                     label: "Bluetooth devices";
                     detail: "Pair and manage audio devices";
                     value: "Manage";
-                    clicked => {}
+                    clicked => { root.bluetooth-manage-requested(); }
                 }
 
                 SettingChoice {
@@ -751,6 +816,174 @@ component BackgroundsPage inherits Rectangle {
                     entry: entry;
                     selected: entry.name == root.selected-name;
                     clicked => { root.background-selected(entry.name); }
+                }
+            }
+        }
+    }
+}
+
+component BluetoothDevicesPage inherits Rectangle {
+    in property <[BluetoothDevice]> devices;
+
+    callback refresh-requested();
+    callback device-selected(string);
+    callback back-requested();
+    callback scan-requested();
+
+    background: transparent;
+
+    VerticalLayout {
+        padding: 16px;
+        spacing: 12px;
+
+        // Header
+        PageHeader {
+            title: "Bluetooth devices";
+            subtitle: "Discover and manage audio devices";
+        }
+
+        // Always-visible Back button
+        Rectangle {
+            width: 100%;
+            height: 42px;
+            border-radius: 10px;
+            background: #26364d;
+
+            Text {
+                text: "<  Back to Settings";
+                color: #dce6f8;
+                font-size: 15px;
+                font-weight: 600;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+
+            TouchArea {
+                clicked => {
+                    root.back-requested();
+                }
+            }
+        }
+
+        // Refresh and scan controls
+        HorizontalLayout {
+            spacing: 8px;
+
+            Rectangle {
+                width: 100px;
+                height: 44px;
+                border-radius: 8px;
+                background: #30303a;
+
+                Text {
+                    text: "Refresh";
+                    color: white;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+
+                TouchArea {
+                    clicked => {
+                        root.refresh-requested();
+                    }
+                }
+            }
+
+            Rectangle {
+                horizontal-stretch: 1;
+                height: 44px;
+                border-radius: 8px;
+                background: #26364d;
+
+                Text {
+                    text: "Scan for devices";
+                    color: white;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+
+                TouchArea {
+                    clicked => {
+                        root.scan-requested();
+                    }
+                }
+            }
+        }
+
+        Text {
+            text: "AVAILABLE DEVICES";
+            color: #999999;
+            font-size: 13px;
+        }
+
+        // Scrollable device list
+        ScrollView {
+            width: 100%;
+            vertical-stretch: 1;
+
+            VerticalLayout {
+                width: 100%;
+                spacing: 9px;
+
+                if root.devices.length == 0: Text {
+                    text: "No Bluetooth devices found. Try scanning.";
+                    color: #999999;
+                    font-size: 14px;
+                    horizontal-alignment: center;
+                }
+
+                for device in root.devices: Rectangle {
+                    width: 100%;
+                    height: 76px;
+                    border-radius: 10px;
+                    background: #1c2028;
+
+                    HorizontalLayout {
+                        padding: 12px;
+                        spacing: 10px;
+                        alignment: center;
+
+                        VerticalLayout {
+                            alignment: center;
+                            spacing: 4px;
+
+                            Text {
+                                text: device.name;
+                                color: #ffffff;
+                                font-size: 16px;
+                                font-weight: 600;
+                                overflow: elide;
+                            }
+
+                            Text {
+                                text: device.status;
+                                color: #9ca3af;
+                                font-size: 12px;
+                            }
+                        }
+
+                        Rectangle {
+                            width: 90px;
+                            height: 40px;
+                            border-radius: 8px;
+                            background: #303744;
+
+                            Text {
+                                text: device.connected
+                                    ? "Disconnect"
+                                    : "Connect";
+                                color: #ffffff;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+
+                            TouchArea {
+                                clicked => {
+                                    root.device-selected(device.address);
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -1180,14 +1413,17 @@ export component MainWindow inherits Window {
         "Now Streaming",
     ];
     in-out property <int> subtitle-index: 0;
-    property <int> music-volume: 58;
-    property <int> headphones-volume: 42;
-    property <int> other-volume: 25;
+    in-out property <int> system-volume: 58;
     property <bool> bluetooth-enabled: true;
     in-out property <int> background-overlay-opacity: 25;
     in-out property <int> video-speed-percent: 100;
     in-out property <string> background-fit: "Stretch";
     in-out property <string> audio-output: "";
+    in-out property <[AudioOutput]> audio-outputs: [];
+    in-out property <[string]> audio-output-options: [];
+    in-out property <[string]> audio-output-sink-names: [];
+    in-out property <[BluetoothDevice]> bluetooth-devices: [];
+
     in-out property <string> now-playing-title: "Nothing playing";
     in-out property <string> now-playing-artist: "Cadence";
     in-out property <string> now-playing-album: "";
@@ -1210,6 +1446,12 @@ export component MainWindow inherits Window {
     callback video-speed-percent-changed(int);
     callback background-fit-changed(string);
     callback audio-output-requested();
+    callback audio-output-selected(string);
+    callback system-volume-changed(int);
+    callback bluetooth-devices-refresh-requested();
+    callback bluetooth-device-selected(string);
+    callback bluetooth-manage-requested();
+    callback bluetooth-scan-requested();
     Rectangle {
         width: parent.width;
         height: parent.height;
@@ -1304,19 +1546,35 @@ export component MainWindow inherits Window {
             }
 
             if root.current-page == "Settings": SettingsPage {
-                music-volume: root.music-volume;
-                headphones-volume: root.headphones-volume;
-                other-volume: root.other-volume;
+                system-volume: root.system-volume;
                 bluetooth-enabled: root.bluetooth-enabled;
                 background-overlay-opacity: root.background-overlay-opacity;
                 video-speed-percent: root.video-speed-percent;
                 background-fit: root.background-fit;
                 audio-output: root.audio-output;
+                audio-outputs: root.audio-outputs;
+                audio-output-options: root.audio-output-options;
+                audio-output-sink-names: root.audio-output-sink-names;
+                bluetooth-devices: root.bluetooth-devices;
+
+                bluetooth-devices-refresh-requested() => {
+                    root.bluetooth-devices-refresh-requested();
+                }
+
+                bluetooth-device-selected(address) => {
+                    root.bluetooth-device-selected(address);
+                }
+
+                bluetooth-manage-requested() => {
+                    root.current-page = "BluetoothDevices";
+                }
+
                 background-options: root.background-options;
                 background-name: root.background-name;
-                music-volume-changed(value) => { root.music-volume = value; }
-                headphones-volume-changed(value) => { root.headphones-volume = value; }
-                other-volume-changed(value) => { root.other-volume = value; }
+                system-volume-changed(value) => {
+                    root.system-volume = value;
+                    root.system-volume-changed(value);
+                }
                 bluetooth-enabled-changed(value) => { root.bluetooth-enabled = value; }
                 background-selected(value) => { root.background-selected(value); }
                 background-overlay-opacity-changed(value) => {
@@ -1332,8 +1590,29 @@ export component MainWindow inherits Window {
                     root.background-fit-changed(value);
                 }
                 audio-output-requested => { root.audio-output-requested(); }
+                audio-output-selected(name) => { root.audio-output-selected(name); }
                 backgrounds-requested => { root.current-page = "Backgrounds"; }
                 back-requested => { root.current-page = "Home"; }
+            }
+
+            if root.current-page == "BluetoothDevices": BluetoothDevicesPage {
+                devices: root.bluetooth-devices;
+
+                refresh-requested => {
+                    root.bluetooth-devices-refresh-requested();
+                }
+
+                device-selected(address) => {
+                    root.bluetooth-device-selected(address);
+                }
+
+                back-requested => {
+                    root.current-page = "Settings";
+                }
+
+                scan-requested => {
+                    root.bluetooth-scan-requested();
+                }
             }
 
             if root.current-page == "Backgrounds": BackgroundsPage {

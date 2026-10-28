@@ -7,6 +7,7 @@ use std::{
     rc::Rc,
     sync::mpsc::{self, Receiver, SyncSender},
 };
+use std::io::BufRead;
 
 use serde::Deserialize;
 use slint::{Image, ModelRc, SharedPixelBuffer, SharedString, Timer, TimerMode, VecModel};
@@ -36,6 +37,8 @@ struct DeviceSettings {
     background_fit: String,
     #[serde(default)]
     selected_audio_sink: String,
+    #[serde(default = "default_volume_percent")]
+    volume_percent: i32,
 }
 
 #[derive(Debug, Deserialize, Default)]
@@ -63,7 +66,9 @@ fn default_player() -> String {
 fn default_video_speed() -> i32 {
     100
 }
-
+fn default_volume_percent() -> i32 {
+    58
+}
 fn default_background_fit() -> String {
     "Stretch".to_string()
 }
@@ -77,6 +82,27 @@ struct VideoFrame {
     pixels: Vec<u8>,
     width: u32,
     height: u32,
+}
+
+fn apply_audio_volume(
+    sink_name: &str,
+    volume_percent: i32,
+) -> Result<(), String> {
+    let volume = format!("{}%", volume_percent.clamp(0, 100));
+
+    let output = Command::new("amixer")
+        .args(["-c", "1", "sset", "Headphone", &volume])
+        .output()
+        .map_err(|e| format!("Failed to run pactl: {e}"))?;
+
+    if !output.status.success() {
+        return Err(format!(
+            "Failed to set volume: {}",
+            String::from_utf8_lossy(&output.stderr)
+        ));
+    }
+
+    Ok(())
 }
 
 fn music_library_is_running() -> Result<bool, String> {
@@ -315,24 +341,221 @@ fn update_now_playing(window: &MainWindow, image_loader: &mut ImageLoader) {
     window.set_now_playing_progress(now_playing.progress.clamp(0.0, 1.0));
     window.set_now_playing(now_playing.playing);
 }
+
 #[derive(Clone, Debug)]
 struct AudioSink {
     name: String,
     label: String,
 }
 
+#[derive(Clone, Debug)]
+struct BluetoothDeviceInfo {
+    address: String,
+    name: String,
+    paired: bool,
+    connected: bool,
+    status: String,
+}
+
+fn list_paired_bluetooth_devices() -> Vec<BluetoothDeviceInfo> {
+    let output = match Command::new("bluetoothctl")
+        .args(["devices"])
+        .output()
+    {
+        Ok(output) if output.status.success() => output,
+        Ok(output) => {
+            eprintln!(
+                "Could not list paired Bluetooth devices: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            );
+            return Vec::new();
+        }
+        Err(error) => {
+            eprintln!("Could not run bluetoothctl: {error}");
+            return Vec::new();
+        }
+    };
+
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter_map(|line| {
+            let mut fields = line.splitn(3, ' ');
+            if fields.next()? != "Device" {
+                return None;
+            }
+
+            let address = fields.next()?.to_string();
+            let name = fields.next()?.trim().to_string();
+
+            if address.is_empty() {
+                return None;
+            }
+
+            let info = Command::new("bluetoothctl")
+                .args(["info", address.as_str()])
+                .output()
+                .ok();
+
+            let info_text = info
+                .as_ref()
+                .filter(|result| result.status.success())
+                .map(|result| String::from_utf8_lossy(&result.stdout).into_owned())
+                .unwrap_or_default();
+
+            let connected = info_text.lines().any(|line| {
+                line.trim() == "Connected: yes"
+            });
+
+            let paired = info_text.lines().any(|line| {
+                line.trim() == "Paired: yes"
+            });
+
+            let name = info_text
+                .lines()
+                .filter_map(|line| {
+                    let line = line.trim();
+
+                    line.strip_prefix("Alias:")
+                        .or_else(|| line.strip_prefix("Name:"))
+                        .map(str::trim)
+                        .filter(|name| !name.is_empty())
+                })
+                .find(|name| !name.eq_ignore_ascii_case(&address))
+                .or_else(|| {
+                    (!name.is_empty() && !name.eq_ignore_ascii_case(&address))
+                        .then_some(name.as_str())
+                })
+                .unwrap_or("Unknown Bluetooth device")
+                .to_string();
+
+            let status = if connected {
+                "Connected"
+            } else if paired {
+                "Paired · Disconnected"
+            } else {
+                "Not paired"
+            };
+
+            Some(BluetoothDeviceInfo {
+                address,
+                name,
+                paired,
+                connected,
+                status: status.to_string(),
+            })
+        })
+        .collect()
+}
+
+fn toggle_bluetooth_device(address: &str) {
+    let devices = list_paired_bluetooth_devices();
+
+    let Some(device) = devices.iter().find(|device| device.address == address) else {
+        eprintln!("Bluetooth device not found: {address}");
+        return;
+    };
+
+    let action = if device.connected {
+        "disconnect"
+    } else {
+        "connect"
+    };
+
+    match Command::new("bluetoothctl")
+        .args([action, address])
+        .status()
+    {
+        Ok(status) if status.success() => {
+            println!("Bluetooth {action} requested for {address}");
+        }
+        Ok(status) => {
+            eprintln!("Bluetooth {action} failed with status: {status}");
+        }
+        Err(error) => {
+            eprintln!("Could not run bluetoothctl: {error}");
+        }
+    }
+}
+
+fn bluetooth_device_model() -> ModelRc<BluetoothDevice> {
+    let devices = list_paired_bluetooth_devices()
+        .into_iter()
+        .map(|device| BluetoothDevice {
+            address: SharedString::from(device.address),
+            name: SharedString::from(device.name),
+            paired: device.paired,
+            connected: device.connected,
+            status: SharedString::from(device.status),
+        })
+        .collect::<Vec<_>>();
+
+    ModelRc::new(VecModel::from(devices))
+}
+
+fn start_bluetooth_discovery() {
+    match Command::new("bluetoothctl")
+        .args(["--timeout", "10", "scan", "on"])
+        .status()
+    {
+        Ok(status) if status.success() => {
+            println!("Bluetooth discovery completed");
+        }
+        Ok(status) => {
+            eprintln!("Bluetooth discovery exited with status: {status}");
+        }
+        Err(error) => {
+            eprintln!("Could not start Bluetooth discovery: {error}");
+        }
+    }
+}
+
 fn audio_sink_label(name: &str) -> String {
     let lower = name.to_ascii_lowercase();
+
+    if lower.contains("bluez_output.") {
+        // Extract the Bluetooth address from the PipeWire sink name.
+        let address = name
+            .strip_prefix("bluez_output.")
+            .and_then(|rest| rest.rsplit_once('.').map(|(address, _)| address))
+            .map(|address| address.replace('_', ":"));
+
+        if let Some(address) = address {
+            let output = Command::new("bluetoothctl")
+                .args(["info", &address])
+                .output();
+
+            if let Ok(output) = output {
+                let info = String::from_utf8_lossy(&output.stdout);
+
+                if let Some(alias) = info.lines().find_map(|line| {
+                    let line = line.trim();
+                    line.strip_prefix("Alias:")
+                        .map(str::trim)
+                        .filter(|alias| !alias.is_empty())
+                }) {
+                    return alias.to_string();
+                }
+            }
+        }
+
+        return "Bluetooth headphones".to_string();
+    }
+
     if lower.contains("hdmi") {
         "HDMI".to_string()
-    } else if lower.contains("wm8960") || lower.contains("soc_sound") || lower.contains("stereo-fallback") {
+    } else if lower.contains("wm8960")
+        || lower.contains("soc_sound")
+        || lower.contains("stereo-fallback")
+    {
         "WM8960 / Headphones".to_string()
     } else {
         name.strip_prefix("alsa_output.")
             .unwrap_or(name)
-            .replace('_', " ").replace('.', " ")
+            .replace('_', " ")
+            .replace('.', " ")
     }
 }
+
 
 fn list_audio_sinks() -> Vec<AudioSink> {
     let output = match Command::new("pactl").args(["list", "short", "sinks"]).output() {
@@ -427,6 +650,7 @@ fn load_device_settings() -> DeviceSettings {
             video_speed_percent: default_video_speed(),
             background_fit: default_background_fit(),
             selected_audio_sink: String::new(),
+            volume_percent: 58,
         })
 }
 
@@ -463,6 +687,7 @@ fn save_device_settings(
         video_speed_percent,
         background_fit: background_fit.to_string(),
         selected_audio_sink,
+        volume_percent: 58,
     }) {
         Ok(contents) => contents,
         Err(error) => {
@@ -740,6 +965,7 @@ fn main() -> Result<(), slint::PlatformError> {
         .map_err(|error| slint::PlatformError::from(error.to_string()))?;
 
     let window = MainWindow::new()?;
+    window.set_bluetooth_devices(bluetooth_device_model());
     let phrase_count = 15u32;
     let phrase_index = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -839,6 +1065,74 @@ fn main() -> Result<(), slint::PlatformError> {
         .or_else(default_audio_sink)
         .or_else(|| audio_sinks.first().map(|sink| sink.name.clone()));
     let current_audio_sink = Rc::new(RefCell::new(selected_sink.clone().unwrap_or_default()));
+    window.set_audio_outputs(
+        std::rc::Rc::new(slint::VecModel::from(
+            audio_sinks
+                .iter()
+                .map(|sink| AudioOutput {
+                    name: SharedString::from(sink.name.as_str()),
+                    label: SharedString::from(sink.label.as_str()),
+                })
+                .collect::<Vec<_>>(),
+        ))
+        .into(),
+    );
+    let audio_monitor_window = window.as_weak();
+
+    std::thread::spawn(move || {
+    loop {
+        let mut child = match Command::new("pactl")
+            .arg("subscribe")
+            .stdout(Stdio::piped())
+            .stderr(Stdio::null())
+            .spawn()
+        {
+            Ok(child) => child,
+            Err(error) => {
+                eprintln!("Could not monitor audio device changes: {error}");
+                std::thread::sleep(std::time::Duration::from_secs(3));
+                continue;
+            }
+        };
+
+        if let Some(stdout) = child.stdout.take() {
+            for line in std::io::BufReader::new(stdout).lines() {
+                let Ok(line) = line else {
+                    break;
+                };
+
+                if !line.contains(" on sink ") {
+                    continue;
+                }
+
+                let window = audio_monitor_window.clone();
+
+                let _ = slint::invoke_from_event_loop(move || {
+                    if let Some(window) = window.upgrade() {
+                        let sinks = list_audio_sinks();
+
+                        let outputs = sinks
+                            .into_iter()
+                            .map(|sink| AudioOutput {
+                                name: SharedString::from(sink.name),
+                                label: SharedString::from(sink.label),
+                            })
+                            .collect::<Vec<_>>();
+
+                        window.set_audio_outputs(
+                            std::rc::Rc::new(slint::VecModel::from(outputs)).into(),
+                        );
+                    }
+                });
+            }
+        }
+
+        let _ = child.kill();
+        let _ = child.wait();
+
+        std::thread::sleep(std::time::Duration::from_secs(2));
+    }
+});
     if let Some(selected_name) = selected_sink.as_deref() {
         if !saved_sink.is_empty() && saved_sink == selected_name {
             if let Err(error) = apply_audio_output(selected_name) {
@@ -904,6 +1198,29 @@ fn main() -> Result<(), slint::PlatformError> {
             );
         }
     });
+    window.on_bluetooth_device_selected({
+        let window = window.as_weak();
+
+        move |address| {
+            toggle_bluetooth_device(address.as_str());
+
+            if let Some(window) = window.upgrade() {
+                window.set_bluetooth_devices(bluetooth_device_model());
+            }
+        }
+    });
+    let weak = window.as_weak();
+    window.on_system_volume_changed(move |volume| {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+
+        let sink_name = window.get_audio_output().to_string();
+
+        if let Err(error) = apply_audio_volume(&sink_name, volume) {
+            eprintln!("Failed to change system volume: {error}");
+        }
+    });
     let speed_window_weak = window.as_weak();
     let speed_background_by_name = background_by_name.clone();
     let speed_process = background_process.clone();
@@ -938,6 +1255,23 @@ fn main() -> Result<(), slint::PlatformError> {
             );
         }
     });
+    window.on_bluetooth_scan_requested({
+        let window = window.as_weak();
+
+        move || {
+            let window = window.clone();
+
+            std::thread::spawn(move || {
+                start_bluetooth_discovery();
+
+                let _ = slint::invoke_from_event_loop(move || {
+                    if let Some(window) = window.upgrade() {
+                        window.set_bluetooth_devices(bluetooth_device_model());
+                    }
+                });
+            });
+        }
+    });
     let audio_window_weak = window.as_weak();
     let current_audio_sink_for_callback = current_audio_sink.clone();
     window.on_audio_output_requested(move || {
@@ -967,6 +1301,51 @@ fn main() -> Result<(), slint::PlatformError> {
                     window.get_video_speed_percent(),
                     &window.get_background_fit(),
                     Some(&next.name),
+                );
+            }
+            Err(error) => eprintln!("Could not change audio output: {error}"),
+        }
+    });
+    window.on_bluetooth_devices_refresh_requested({
+        let window = window.as_weak();
+
+        move || {
+            if let Some(window) = window.upgrade() {
+                window.set_bluetooth_devices(bluetooth_device_model());
+            }
+        }
+    });
+
+    let audio_select_window_weak = window.as_weak();
+    let current_audio_sink_for_select = current_audio_sink.clone();
+
+    window.on_audio_output_selected(move |selected_name| {
+        let Some(window) = audio_select_window_weak.upgrade() else {
+            return;
+        };
+
+        let selected_name = selected_name.to_string();
+        let available_sinks = list_audio_sinks();
+
+        let Some(sink) = available_sinks
+            .iter()
+            .find(|sink| sink.name == selected_name)
+        else {
+            eprintln!("Audio output not found: {selected_name}");
+            return;
+        };
+
+        match apply_audio_output(&sink.name) {
+            Ok(()) => {
+                *current_audio_sink_for_select.borrow_mut() = sink.name.clone();
+                window.set_audio_output(SharedString::from(sink.label.as_str()));
+
+                save_device_settings(
+                    &window.get_background_name().to_string(),
+                    window.get_background_overlay_opacity(),
+                    window.get_video_speed_percent(),
+                    &window.get_background_fit(),
+                    Some(&sink.name),
                 );
             }
             Err(error) => eprintln!("Could not change audio output: {error}"),
